@@ -1,4 +1,4 @@
-import { Aisle, Product, Store, Transaction, UserProfile } from '../types';
+import type { Aisle, Product, Store, Transaction, UserProfile } from '../types';
 
 export const mockUser: UserProfile = {
   id: 'u-101',

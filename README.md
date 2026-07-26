@@ -70,6 +70,21 @@ Items live in one flat list and are grouped by `storeId` on read (`useCart`).
 Each fulfilment hub therefore gets its own cart with its own subtotal and item
 count, since hubs ship independently.
 
+## Backend
+
+The API lives in `server/` — Express + SQLite, serving catalog, carts, checkout,
+order tracking and profiles. See its [README](server/README.md).
+
+```bash
+cd server
+npm install
+npm run seed
+npm run dev     # http://localhost:4000
+```
+
+The web app still runs entirely on `src/data/mockData.ts`; wiring it to the API
+is the next step.
+
 ## Shipping as a native app
 
 There are two native paths in this repo, and they are independent:
