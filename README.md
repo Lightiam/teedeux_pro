@@ -157,12 +157,8 @@ dismissal, and routing the Android hardware back button through the app's own
 navigation history. Every entry point checks `Capacitor.isNativePlatform()`
 first and the plugin imports are dynamic, so a browser build never loads them.
 
-## Demo navigation
-
-A "Screen Previewer" control sits in the top-right corner and jumps directly to
-any of the 16 screens. It is a development aid, not part of the shopping flow.
-
 ## Data
 
-All catalog data is mock data in `src/data/mockData.ts` — 29 products across 4
-fulfilment hubs. There is no backend yet.
+The catalog is 29 products across 4 fulfilment hubs. It lives in
+`src/data/mockData.ts`, but the app no longer reads that file — it is the seed
+source for both backends, and the clients fetch everything over HTTP.

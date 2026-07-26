@@ -26,7 +26,6 @@ import { TransactionsScreen } from './components/TransactionsScreen';
 import { ProfileScreen } from './components/ProfileScreen';
 import { PaymentMethodsScreen } from './components/PaymentMethodsScreen';
 import { ProductSheet } from './components/ProductSheet';
-import { DemoNavigator } from './components/DemoNavigator';
 
 /** Screens reachable from a tab — landing on one shouldn't offer a back arrow. */
 const ROOT_SCREENS: ScreenId[] = ['home', 'stores', 'buy-it-again', 'cart', 'profile'];
@@ -198,8 +197,6 @@ function Shop() {
 
   return (
     <Shell>
-      <DemoNavigator currentScreen={currentScreen} onNavigate={navigate} />
-
       <Header
         currentScreen={currentScreen}
         onNavigate={navigate}

@@ -94,11 +94,25 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 
   if (response.status === 204) return undefined as T;
 
+  const isJson = (response.headers.get('content-type') ?? '').includes('application/json');
+
   let payload: unknown = null;
-  try {
-    payload = await response.json();
-  } catch {
-    // Some error responses carry no body.
+  if (isJson) {
+    try {
+      payload = await response.json();
+    } catch {
+      // Declared JSON but unparseable — treated as a missing body below.
+    }
+  }
+
+  // A non-JSON response means the request never reached the API — usually a
+  // wrong EXPO_PUBLIC_API_URL, or a host serving its web shell on /api paths.
+  if (!isJson) {
+    throw new ApiError(
+      response.status,
+      `The API did not respond at ${BASE_URL}/api. Check that the backend is running and reachable.`,
+      'api_unreachable'
+    );
   }
 
   if (!response.ok) {

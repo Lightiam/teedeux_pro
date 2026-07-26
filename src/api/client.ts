@@ -98,11 +98,30 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     return undefined as T;
   }
 
+  const isJson = (response.headers.get('content-type') ?? '').includes('application/json');
+
   let payload: unknown = null;
-  try {
-    payload = await response.json();
-  } catch {
-    // Some error responses have no body; fall through to the status-based message.
+  if (isJson) {
+    try {
+      payload = await response.json();
+    } catch {
+      // Declared JSON but unparseable — treated as a missing body below.
+    }
+  }
+
+  // A non-JSON response on an API path means the request never reached the
+  // API. Two ways that happens in practice, both worth naming rather than
+  // reporting as a bare status code:
+  //   - Nothing is deployed at /api, so a SPA host serves index.html instead.
+  //   - A host rewrites unmatched GETs to index.html but 404s other verbs,
+  //     which is why signup (a POST) fails while page loads look fine.
+  if (!isJson) {
+    throw new ApiError(
+      response.status,
+      `The API did not respond at ${BASE_URL || window.location.origin}/api. ` +
+        'Check that the backend is running and reachable.',
+      'api_unreachable'
+    );
   }
 
   if (!response.ok) {
