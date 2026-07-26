@@ -16,23 +16,29 @@
   NPM_FLAGS = "--include=dev"
 
 # ---------------------------------------------------------------------------
-# API proxying
+# API proxying — DISABLED until you have a deployed API
 # ---------------------------------------------------------------------------
 # The client calls relative /api paths, matching the Vite dev proxy, so the same
-# code works in both places. Replace API_TARGET below with your deployed API
-# origin. Until then the rule 404s rather than silently serving index.html,
-# which would surface as confusing JSON parse errors in the client.
-[[redirects]]
-  from = "/api/*"
-  to = "https://API_TARGET/api/:splat"
-  status = 200
-  force = true
+# code works in both places.
+#
+# Uncomment the block below and replace the host with your real API origin. Do
+# NOT leave a placeholder hostname in an active rule: Netlify validates the
+# redirect set at deploy time, and one unresolvable rule can invalidate the
+# whole block — taking the SPA fallback with it and 404-ing every route.
+#
+# The rule must stay ABOVE the SPA fallback. Netlify applies rules in order, and
+# the catch-all would otherwise swallow /api requests and serve index.html,
+# surfacing in the client as confusing JSON parse errors.
+#
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://your-api-host.example.com/api/:splat"
+#   status = 200
+#   force = true
 
 # ---------------------------------------------------------------------------
 # SPA fallback
 # ---------------------------------------------------------------------------
-# Must come after the API rule: Netlify applies redirects in order, and a
-# catch-all placed first would swallow /api requests.
 [[redirects]]
   from = "/*"
   to = "/index.html"

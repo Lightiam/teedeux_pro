@@ -106,11 +106,17 @@ fallback, long-lived caching for fingerprinted assets, and security headers.
 
 Two things need doing before it works end to end:
 
-1. **Deploy the API separately and set `API_TARGET`** in `netlify.toml`'s `/api/*`
-   redirect. Netlify Functions cannot host this API — it is a long-running
-   Express process backed by a SQLite file, and Functions have an ephemeral
-   per-invocation filesystem, so every write would be lost. Use a host with a
-   persistent disk (Fly.io, Railway, Render, a VM).
+1. **Deploy the API separately, then uncomment the `/api/*` redirect** in
+   `netlify.toml` and point it at that host. The rule ships commented out on
+   purpose — Netlify validates the redirect set at deploy time, and a rule with
+   an unresolvable placeholder host can invalidate the whole block, taking the
+   SPA fallback with it and 404-ing every route.
+
+   Netlify Functions cannot host this API: it is a long-running Express process
+   backed by a SQLite file, and Functions have an ephemeral per-invocation
+   filesystem, so every write would be lost. Use a host with a persistent disk
+   (Fly.io, Railway, Render, a VM) — or switch to the Firebase backend, which
+   has no such constraint.
 
 2. **Add your Netlify origin to the API's `CORS_ORIGINS`.** Requests proxied
    through the redirect arrive same-origin, but any direct call — the Capacitor
