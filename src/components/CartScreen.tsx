@@ -1,49 +1,72 @@
 import React, { useState } from 'react';
-import { ScreenId, StoreCart } from '../types';
+import { ScreenId } from '../types';
+import type { ApiStoreCart, ApiTotals } from '../api/types';
 import { QuantityStepper } from './ui/QuantityStepper';
 
 interface CartScreenProps {
-  storeCarts: StoreCart[];
-  subtotal: number;
+  storeCarts: ApiStoreCart[];
+  totals: ApiTotals;
+  promoValid: boolean | null;
+  isLoading: boolean;
+  error: string | null;
   onSetQuantity: (productId: string, quantity: number) => void;
   onClearStore: (storeId: string) => void;
+  onApplyPromo: (code: string) => Promise<void>;
+  onCheckout: () => Promise<void>;
   onNavigate: (screen: ScreenId) => void;
 }
 
-const PROMO_CODES: Record<string, number> = {
-  AFRICA10: 5,
-  FRESH: 5,
-};
-
 /**
- * One cart per fulfilment hub. Each hub ships separately, so fees and the
- * checkout action belong to the hub rather than to a single global basket.
+ * One cart per fulfilment hub. Totals come from the server so the figure shown
+ * here is the figure that will be charged.
  */
 export const CartScreen: React.FC<CartScreenProps> = ({
   storeCarts,
-  subtotal,
+  totals,
+  promoValid,
+  isLoading,
+  error,
   onSetQuantity,
   onClearStore,
+  onApplyPromo,
+  onCheckout,
   onNavigate,
 }) => {
   const [promoCode, setPromoCode] = useState('');
-  const [discount, setDiscount] = useState(0);
-  const [promoMessage, setPromoMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  const [expanded, setExpanded] = useState<string | null>(storeCarts[0]?.store.id ?? null);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
-  const applyPromo = (e: React.FormEvent) => {
+  // Default the first hub open, without fighting an explicit collapse.
+  const openId = expanded ?? storeCarts[0]?.store.id ?? null;
+
+  const applyPromo = async (e: React.FormEvent) => {
     e.preventDefault();
-    const code = promoCode.trim().toUpperCase();
-    const value = PROMO_CODES[code];
+    if (!promoCode.trim()) return;
+    await onApplyPromo(promoCode.trim());
+  };
 
-    if (value) {
-      setDiscount(value);
-      setPromoMessage({ ok: true, text: `Code applied — $${value.toFixed(2)} off` });
-    } else {
-      setDiscount(0);
-      setPromoMessage({ ok: false, text: 'Invalid code. Try FRESH or AFRICA10' });
+  const checkout = async () => {
+    setCheckoutError(null);
+    setCheckingOut(true);
+    try {
+      await onCheckout();
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : 'Checkout failed');
+    } finally {
+      setCheckingOut(false);
     }
   };
+
+  if (isLoading && storeCarts.length === 0) {
+    return (
+      <div className="px-4 pt-4 space-y-3">
+        {Array.from({ length: 2 }, (_, i) => (
+          <div key={i} className="h-20 rounded-2xl bg-stone-200/70 animate-pulse" />
+        ))}
+      </div>
+    );
+  }
 
   if (storeCarts.length === 0) {
     return (
@@ -55,6 +78,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
         <p className="text-sm text-[#584238] mt-1">
           Add items from any hub and they'll collect here.
         </p>
+        {error && <p className="text-xs text-[#9E2A2B] mt-3">{error}</p>}
         <button
           type="button"
           onClick={() => onNavigate('stores')}
@@ -66,10 +90,6 @@ export const CartScreen: React.FC<CartScreenProps> = ({
     );
   }
 
-  const deliveryFee = subtotal > 35 ? 0 : 3.99;
-  const serviceFee = 1.5;
-  const total = Math.max(0, subtotal + deliveryFee + serviceFee - discount);
-
   return (
     <div className="pb-6 space-y-4">
       <div className="px-4 pt-3">
@@ -78,10 +98,14 @@ export const CartScreen: React.FC<CartScreenProps> = ({
         </p>
       </div>
 
+      {error && (
+        <p className="mx-4 text-xs text-[#93000a] bg-[#ffdad6] rounded-xl px-3 py-2">{error}</p>
+      )}
+
       {/* Per-hub carts */}
       <div className="px-4 space-y-3">
         {storeCarts.map((cart) => {
-          const isOpen = expanded === cart.store.id;
+          const isOpen = openId === cart.store.id;
 
           return (
             <section
@@ -90,7 +114,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
             >
               <button
                 type="button"
-                onClick={() => setExpanded(isOpen ? null : cart.store.id)}
+                onClick={() => setExpanded(isOpen ? '' : cart.store.id)}
                 aria-expanded={isOpen}
                 className="w-full flex items-center gap-3 p-3 text-left active:bg-stone-50 transition-colors"
               >
@@ -181,68 +205,80 @@ export const CartScreen: React.FC<CartScreenProps> = ({
             Apply
           </button>
         </div>
-        {promoMessage && (
+        {promoValid !== null && (
           <p
             className={`text-xs mt-2 px-1 font-semibold ${
-              promoMessage.ok ? 'text-[#3b6934]' : 'text-[#9E2A2B]'
+              promoValid ? 'text-[#3b6934]' : 'text-[#9E2A2B]'
             }`}
           >
-            {promoMessage.text}
+            {promoValid
+              ? `Code applied — $${totals.discount.toFixed(2)} off`
+              : 'Invalid code. Try FRESH or AFRICA10'}
           </p>
         )}
       </form>
 
-      {/* Totals */}
+      {/* Totals — all figures come from the server */}
       <div className="px-4">
         <div className="bg-white rounded-2xl border border-stone-200/70 p-4 space-y-2.5">
           <div className="flex justify-between text-sm">
             <span className="text-[#584238]">Subtotal</span>
-            <span className="font-semibold tabular-nums">${subtotal.toFixed(2)}</span>
+            <span className="font-semibold tabular-nums">${totals.subtotal.toFixed(2)}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-[#584238]">Delivery</span>
             <span className="font-semibold tabular-nums">
-              {deliveryFee === 0 ? (
+              {totals.deliveryFee === 0 ? (
                 <span className="text-[#3b6934]">Free</span>
               ) : (
-                `$${deliveryFee.toFixed(2)}`
+                `$${totals.deliveryFee.toFixed(2)}`
               )}
             </span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-[#584238]">Service fee</span>
-            <span className="font-semibold tabular-nums">${serviceFee.toFixed(2)}</span>
+            <span className="font-semibold tabular-nums">${totals.serviceFee.toFixed(2)}</span>
           </div>
-          {discount > 0 && (
+          {totals.discount > 0 && (
             <div className="flex justify-between text-sm text-[#3b6934]">
               <span>Discount</span>
-              <span className="font-semibold tabular-nums">−${discount.toFixed(2)}</span>
+              <span className="font-semibold tabular-nums">−${totals.discount.toFixed(2)}</span>
             </div>
           )}
           <div className="flex justify-between pt-2.5 border-t border-stone-100">
             <span className="font-extrabold text-[#1c1b1b]">Total</span>
             <span className="font-extrabold text-lg text-[#9c3f00] tabular-nums">
-              ${total.toFixed(2)}
+              ${totals.total.toFixed(2)}
             </span>
           </div>
 
-          {subtotal <= 35 && (
+          {totals.amountToFreeDelivery > 0 && (
             <p className="text-[11px] text-[#584238] bg-[#f6f3f2] rounded-xl px-3 py-2 mt-1">
-              Add ${(35 - subtotal).toFixed(2)} more for free delivery
+              Add ${totals.amountToFreeDelivery.toFixed(2)} more for free delivery
             </p>
           )}
         </div>
       </div>
 
       {/* Checkout */}
-      <div className="px-4 pt-1">
+      <div className="px-4 pt-1 space-y-2">
+        {checkoutError && (
+          <p className="text-xs text-[#93000a] bg-[#ffdad6] rounded-xl px-3 py-2">
+            {checkoutError}
+          </p>
+        )}
         <button
           type="button"
-          onClick={() => onNavigate('order-tracking')}
-          className="w-full h-13 py-3.5 rounded-full bg-[#9c3f00] text-white font-extrabold text-sm active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+          onClick={checkout}
+          disabled={checkingOut}
+          className="w-full py-3.5 rounded-full bg-[#9c3f00] text-white font-extrabold text-sm active:scale-[0.98] transition-transform flex items-center justify-center gap-2 disabled:opacity-60 disabled:active:scale-100"
         >
-          <span className="material-symbols-outlined text-xl">lock</span>
-          Checkout • ${total.toFixed(2)}
+          {checkingOut ? (
+            <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+          ) : (
+            <span className="material-symbols-outlined text-xl">lock</span>
+          )}
+          {checkingOut ? 'Placing order…' : `Checkout • $${totals.total.toFixed(2)}`}
         </button>
       </div>
     </div>

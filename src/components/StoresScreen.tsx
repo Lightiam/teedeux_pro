@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Product, ProductCategory, ScreenId, Store } from '../types';
-import { mockAisles, mockProducts, mockStores } from '../data/mockData';
+import { Aisle, Product, ProductCategory, ScreenId, Store } from '../types';
 import { ProductTile } from './ui/ProductTile';
 import { RetailerCard } from './ui/RetailerCard';
 
 interface StoresScreenProps {
+  stores: Store[];
+  products: Product[];
+  aisles: Aisle[];
   onNavigate: (screen: ScreenId) => void;
   onSelectStore: (store: Store) => void;
   onOpenProduct: (product: Product) => void;
@@ -17,6 +19,9 @@ interface StoresScreenProps {
 
 /** Browse: the full catalog, filtered by aisle, plus a hubs tab. */
 export const StoresScreen: React.FC<StoresScreenProps> = ({
+  stores,
+  products,
+  aisles,
   onNavigate,
   onSelectStore,
   onOpenProduct,
@@ -29,9 +34,7 @@ export const StoresScreen: React.FC<StoresScreenProps> = ({
   const [tab, setTab] = useState<'products' | 'hubs'>('products');
 
   const filtered =
-    selectedAisle === 'all'
-      ? mockProducts
-      : mockProducts.filter((p) => p.category === selectedAisle);
+    selectedAisle === 'all' ? products : products.filter((p) => p.category === selectedAisle);
 
   const handleStoreSelect = (store: Store) => {
     onSelectStore(store);
@@ -40,7 +43,7 @@ export const StoresScreen: React.FC<StoresScreenProps> = ({
 
   const chips: Array<{ id: ProductCategory | 'all'; label: string }> = [
     { id: 'all', label: 'All' },
-    ...mockAisles.map((a) => ({ id: a.id, label: a.label })),
+    ...aisles.map((a) => ({ id: a.id, label: a.label })),
   ];
 
   return (
@@ -57,7 +60,7 @@ export const StoresScreen: React.FC<StoresScreenProps> = ({
                 tab === value ? 'bg-white text-[#9c3f00] shadow-sm' : 'text-[#584238]'
               }`}
             >
-              {value === 'products' ? `Items (${mockProducts.length})` : `Hubs (${mockStores.length})`}
+              {value === 'products' ? `Items (${products.length})` : `Hubs (${stores.length})`}
             </button>
           ))}
         </div>
@@ -117,7 +120,7 @@ export const StoresScreen: React.FC<StoresScreenProps> = ({
         </>
       ) : (
         <div className="px-4 pt-3 space-y-2.5">
-          {mockStores.map((store) => (
+          {stores.map((store) => (
             <RetailerCard
               key={store.id}
               store={store}

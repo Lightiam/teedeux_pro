@@ -1,9 +1,10 @@
 import React from 'react';
 import { Product, ScreenId } from '../types';
-import { buyItAgainProducts } from '../data/mockData';
 import { ProductTile } from './ui/ProductTile';
 
 interface BuyItAgainScreenProps {
+  products: Product[];
+  isLoading: boolean;
   onNavigate: (screen: ScreenId) => void;
   onOpenProduct: (product: Product) => void;
   quantityOf: (productId: string) => number;
@@ -12,13 +13,29 @@ interface BuyItAgainScreenProps {
 }
 
 export const BuyItAgainScreen: React.FC<BuyItAgainScreenProps> = ({
+  products,
+  isLoading,
   onNavigate,
   onOpenProduct,
   quantityOf,
   onIncrement,
   onDecrement,
 }) => {
-  if (buyItAgainProducts.length === 0) {
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 gap-x-3 gap-y-5 px-4 pt-4">
+        {Array.from({ length: 6 }, (_, i) => (
+          <div key={i} className="animate-pulse">
+            <div className="aspect-square w-full rounded-2xl bg-stone-200/70 mb-2" />
+            <div className="h-3.5 w-1/3 rounded bg-stone-200/70" />
+            <div className="h-3 w-full rounded bg-stone-200/70 mt-2" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (products.length === 0) {
     return (
       <div className="text-center py-20 px-6">
         <span className="material-symbols-outlined text-5xl text-stone-300">replay</span>
@@ -37,13 +54,13 @@ export const BuyItAgainScreen: React.FC<BuyItAgainScreenProps> = ({
     );
   }
 
-  const addAll = () => buyItAgainProducts.forEach((product) => onIncrement(product));
+  const addAll = () => products.forEach((product) => onIncrement(product));
 
   return (
     <div className="pb-6">
       <div className="px-4 py-3 flex items-center justify-between gap-3">
         <p className="text-xs text-[#584238]">
-          {buyItAgainProducts.length} items from your order history
+          {products.length} items from your order history
         </p>
         <button
           type="button"
@@ -55,7 +72,7 @@ export const BuyItAgainScreen: React.FC<BuyItAgainScreenProps> = ({
       </div>
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-5 px-4">
-        {buyItAgainProducts.map((product) => (
+        {products.map((product) => (
           <ProductTile
             key={product.id}
             product={product}

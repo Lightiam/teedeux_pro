@@ -1,11 +1,14 @@
 import React from 'react';
 import { Aisle, Product, ProductCategory, ScreenId, Store } from '../types';
-import { buyItAgainProducts, mockAisles, mockProducts, mockStores } from '../data/mockData';
 import { ProductTile } from './ui/ProductTile';
 import { RetailerCard } from './ui/RetailerCard';
 import { SectionRail } from './ui/SectionRail';
 
 interface HomeScreenProps {
+  stores: Store[];
+  products: Product[];
+  aisles: Aisle[];
+  buyItAgain: Product[];
   onNavigate: (screen: ScreenId) => void;
   onSelectStore: (store: Store) => void;
   onSelectAisle: (aisle: ProductCategory) => void;
@@ -16,6 +19,10 @@ interface HomeScreenProps {
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
+  stores,
+  products,
+  aisles,
+  buyItAgain,
   onNavigate,
   onSelectStore,
   onSelectAisle,
@@ -34,8 +41,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     onNavigate('stores');
   };
 
-  const newArrivals = mockProducts.filter((p) => p.isNewArrival).slice(0, 10);
-  const underTwenty = mockProducts.filter((p) => p.price < 20).slice(0, 10);
+  const newArrivals = products.filter((p) => p.isNewArrival).slice(0, 10);
+  const underTwenty = products.filter((p) => p.price < 20).slice(0, 10);
 
   const tileProps = {
     onIncrement,
@@ -57,24 +64,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       </div>
 
       {/* Retailer carousel — pick where to shop */}
-      <SectionRail
-        title="Shop by hub"
-        subtitle="Verified African grocery fulfilment hubs"
-        onSeeAll={() => onNavigate('stores')}
-      >
-        {mockStores.map((store) => (
-          <RetailerCard key={store.id} store={store} onSelect={handleStoreSelect} />
-        ))}
-      </SectionRail>
+      {stores.length > 0 && (
+        <SectionRail
+          title="Shop by hub"
+          subtitle="Verified African grocery fulfilment hubs"
+          onSeeAll={() => onNavigate('stores')}
+        >
+          {stores.map((store) => (
+            <RetailerCard key={store.id} store={store} onSelect={handleStoreSelect} />
+          ))}
+        </SectionRail>
+      )}
 
       {/* Buy it again — highest-intent row for a returning shopper */}
-      {buyItAgainProducts.length > 0 && (
+      {buyItAgain.length > 0 && (
         <SectionRail
           title="Buy it again"
           subtitle="Straight from your past orders"
           onSeeAll={() => onNavigate('buy-it-again')}
         >
-          {buyItAgainProducts.map((product) => (
+          {buyItAgain.map((product) => (
             <ProductTile
               key={product.id}
               product={product}
@@ -87,34 +96,36 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       )}
 
       {/* Aisle grid */}
-      <section className="space-y-3">
-        <div className="px-4">
-          <h2 className="text-lg font-extrabold text-[#1c1b1b]">Shop by aisle</h2>
-          <p className="text-xs text-[#584238] mt-0.5">Browse the full catalog by department</p>
-        </div>
+      {aisles.length > 0 && (
+        <section className="space-y-3">
+          <div className="px-4">
+            <h2 className="text-lg font-extrabold text-[#1c1b1b]">Shop by aisle</h2>
+            <p className="text-xs text-[#584238] mt-0.5">Browse the full catalog by department</p>
+          </div>
 
-        <div className="grid grid-cols-3 gap-3 px-4">
-          {mockAisles.map((aisle) => (
-            <button
-              key={aisle.id}
-              type="button"
-              onClick={() => handleAisleSelect(aisle)}
-              className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
-            >
-              <div
-                className={`${aisle.tint} h-16 w-16 rounded-full flex items-center justify-center`}
+          <div className="grid grid-cols-3 gap-3 px-4">
+            {aisles.map((aisle) => (
+              <button
+                key={aisle.id}
+                type="button"
+                onClick={() => handleAisleSelect(aisle)}
+                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
               >
-                <span className="material-symbols-outlined text-[28px] text-[#584238]">
-                  {aisle.icon}
+                <div
+                  className={`${aisle.tint} h-16 w-16 rounded-full flex items-center justify-center`}
+                >
+                  <span className="material-symbols-outlined text-[28px] text-[#584238]">
+                    {aisle.icon}
+                  </span>
+                </div>
+                <span className="text-[11px] font-semibold text-[#1c1b1b] text-center leading-tight">
+                  {aisle.label}
                 </span>
-              </div>
-              <span className="text-[11px] font-semibold text-[#1c1b1b] text-center leading-tight">
-                {aisle.label}
-              </span>
-            </button>
-          ))}
-        </div>
-      </section>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Curated rows */}
       {newArrivals.length > 0 && (
@@ -154,21 +165,23 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       )}
 
       {/* All hubs, as rows */}
-      <section className="space-y-3">
-        <div className="px-4">
-          <h2 className="text-lg font-extrabold text-[#1c1b1b]">All fulfilment hubs</h2>
-        </div>
-        <div className="px-4 space-y-2.5">
-          {mockStores.map((store) => (
-            <RetailerCard
-              key={store.id}
-              store={store}
-              layout="row"
-              onSelect={handleStoreSelect}
-            />
-          ))}
-        </div>
-      </section>
+      {stores.length > 0 && (
+        <section className="space-y-3">
+          <div className="px-4">
+            <h2 className="text-lg font-extrabold text-[#1c1b1b]">All fulfilment hubs</h2>
+          </div>
+          <div className="px-4 space-y-2.5">
+            {stores.map((store) => (
+              <RetailerCard
+                key={store.id}
+                store={store}
+                layout="row"
+                onSelect={handleStoreSelect}
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 };

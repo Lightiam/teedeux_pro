@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { Product, ProductCategory, ScreenId, Store } from '../types';
-import { mockAisles, mockProducts } from '../data/mockData';
+import { Aisle, Product, ProductCategory, ScreenId, Store } from '../types';
 import { ProductTile } from './ui/ProductTile';
 
 interface StoreDetailScreenProps {
   store: Store;
+  products: Product[];
+  aisles: Aisle[];
   onNavigate: (screen: ScreenId) => void;
   onOpenProduct: (product: Product) => void;
   quantityOf: (productId: string) => number;
@@ -14,6 +15,8 @@ interface StoreDetailScreenProps {
 
 export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
   store,
+  products,
+  aisles,
   onNavigate,
   onOpenProduct,
   quantityOf,
@@ -23,15 +26,15 @@ export const StoreDetailScreen: React.FC<StoreDetailScreenProps> = ({
   const [aisle, setAisle] = useState<ProductCategory | 'all'>('all');
 
   const storeProducts = useMemo(
-    () => mockProducts.filter((p) => p.storeId === store.id),
-    [store.id]
+    () => products.filter((p) => p.storeId === store.id),
+    [products, store.id]
   );
 
   /** Only show aisles this hub actually stocks — empty tabs are dead ends. */
   const availableAisles = useMemo(() => {
     const stocked = new Set(storeProducts.map((p) => p.category));
-    return mockAisles.filter((a) => stocked.has(a.id));
-  }, [storeProducts]);
+    return aisles.filter((a) => stocked.has(a.id));
+  }, [aisles, storeProducts]);
 
   const visible =
     aisle === 'all' ? storeProducts : storeProducts.filter((p) => p.category === aisle);

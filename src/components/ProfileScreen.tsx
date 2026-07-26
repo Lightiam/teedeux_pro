@@ -1,186 +1,227 @@
-import React from 'react';
-import { ScreenId, UserProfile } from '../types';
+import React, { useState } from 'react';
+import { ScreenId } from '../types';
+import type { ApiUser } from '../api/types';
+import { profileApi } from '../api/endpoints';
 
 interface ProfileScreenProps {
-  user: UserProfile;
+  user: ApiUser;
   onNavigate: (screen: ScreenId) => void;
-  onSignOut?: () => void;
+  onSignOut: () => void;
+  onUserUpdated: (user: ApiUser) => void;
 }
 
-export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onNavigate, onSignOut }) => {
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({
+  user,
+  onNavigate,
+  onSignOut,
+  onUserUpdated,
+}) => {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(user.name);
+  const [address, setAddress] = useState(user.defaultAddress ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+
+    try {
+      const { user: updated } = await profileApi.update({
+        name: name.trim(),
+        defaultAddress: address.trim() || null,
+      });
+      onUserUpdated(updated);
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save your changes');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancel = () => {
+    setName(user.name);
+    setAddress(user.defaultAddress ?? '');
+    setError(null);
+    setEditing(false);
+  };
+
   return (
-    <div className="bg-[#fcf9f8] text-[#1c1b1b] min-h-screen pb-32 font-['Hanken_Grotesk']">
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* Profile Header Card */}
-        <div className="bg-white p-6 rounded-3xl border border-stone-200/60 shadow-md relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-[#ffdbcc] rounded-full blur-2xl opacity-60 pointer-events-none"></div>
+    <div className="pb-6 space-y-4">
+      {/* Identity */}
+      <div className="px-4 pt-3">
+        <div className="bg-white rounded-2xl border border-stone-200/70 p-4 flex items-center gap-4">
+          {user.avatarUrl ? (
+            <img
+              src={user.avatarUrl}
+              alt=""
+              className="h-16 w-16 rounded-full object-cover bg-stone-100 shrink-0"
+            />
+          ) : (
+            <div className="h-16 w-16 rounded-full bg-[#9c3f00] text-white flex items-center justify-center font-extrabold text-2xl shrink-0">
+              {user.name.charAt(0).toUpperCase()}
+            </div>
+          )}
 
-          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 relative z-10 text-center sm:text-left">
-            <div className="relative">
-              <img
-                className="w-24 h-24 rounded-full object-cover border-4 border-[#9c3f00] p-0.5 shadow-xl"
-                src={user.avatarUrl}
-                alt={user.name}
-              />
-              <span className="absolute bottom-0 right-0 bg-[#3b6934] text-white p-1.5 rounded-full shadow-md border-2 border-white flex items-center justify-center">
-                <span className="material-symbols-outlined text-xs fill-1">verified</span>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-extrabold text-lg text-[#1c1b1b] truncate">{user.name}</h2>
+            <p className="text-xs text-[#584238] truncate">{user.email}</p>
+            {user.isPlusMember && (
+              <span className="inline-block mt-1.5 px-2.5 py-0.5 rounded-full bg-[#ffdbcc] text-[#9c3f00] text-[10px] font-bold">
+                Plus member
               </span>
-            </div>
-
-            <div className="flex-grow space-y-1">
-              <div className="flex flex-col sm:flex-row items-center gap-2">
-                <h1 className="text-2xl font-extrabold text-[#1c1b1b]">{user.name}</h1>
-                {user.isPlusMember && (
-                  <span className="bg-gradient-to-r from-amber-500 to-amber-700 text-white px-3 py-0.5 rounded-full text-[10px] font-bold uppercase font-['JetBrains_Mono'] shadow-sm">
-                    Teedeux Plus Member
-                  </span>
-                )}
-              </div>
-              <p className="font-['JetBrains_Mono'] text-xs text-[#584238]">{user.email}</p>
-              <p className="font-['JetBrains_Mono'] text-xs text-[#584238]">{user.phone}</p>
-            </div>
-
-            <button
-              onClick={() => alert('Profile editing modal opened.')}
-              className="p-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200 text-[#584238] text-xs font-bold flex items-center gap-1.5"
-            >
-              <span className="material-symbols-outlined text-base">edit</span>
-              <span>Edit</span>
-            </button>
-          </div>
-
-          {/* Wallet Quick Balance Stats */}
-          <div className="grid grid-cols-3 gap-3 mt-6 pt-6 border-t border-stone-100 text-center font-['JetBrains_Mono']">
-            <div
-              onClick={() => onNavigate('payment')}
-              className="cursor-pointer p-2 rounded-xl hover:bg-stone-50 transition-colors"
-            >
-              <span className="text-xs text-[#584238] uppercase block">Wallet Balance</span>
-              <span className="text-lg font-extrabold text-[#9c3f00] font-['Hanken_Grotesk']">
-                ${user.walletBalance.toFixed(2)}
-              </span>
-            </div>
-            <div
-              onClick={() => onNavigate('payment')}
-              className="cursor-pointer p-2 rounded-xl hover:bg-stone-50 transition-colors"
-            >
-              <span className="text-xs text-[#584238] uppercase block">Loyalty Points</span>
-              <span className="text-lg font-extrabold text-[#3b6934] font-['Hanken_Grotesk']">
-                {user.loyaltyPoints} pts
-              </span>
-            </div>
-            <div
-              onClick={() => onNavigate('transactions')}
-              className="cursor-pointer p-2 rounded-xl hover:bg-stone-50 transition-colors"
-            >
-              <span className="text-xs text-[#584238] uppercase block">Total Orders</span>
-              <span className="text-lg font-extrabold text-[#1c1b1b] font-['Hanken_Grotesk']">
-                18
-              </span>
-            </div>
+            )}
           </div>
         </div>
+      </div>
 
-        {/* Teedeux Plus Gold Banner */}
-        <div className="bg-gradient-to-r from-[#9c3f00] to-[#c45100] text-white p-6 rounded-3xl shadow-xl flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="font-['JetBrains_Mono'] text-xs font-bold uppercase tracking-wider text-amber-200">
-              Gold Tier Benefits
-            </span>
-            <h3 className="font-extrabold text-xl">Unlimited Free US Express Delivery</h3>
-            <p className="text-xs text-white/90">
-              Plus member savings: You've saved $140.00 in delivery fees this month across the US.
-            </p>
+      {/* Wallet + points */}
+      <div className="px-4 grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => onNavigate('payment')}
+          className="bg-white rounded-2xl border border-stone-200/70 p-4 text-left active:scale-[0.98] transition-transform"
+        >
+          <p className="text-xl font-extrabold text-[#9c3f00] tabular-nums">
+            ${user.walletBalance.toFixed(2)}
+          </p>
+          <p className="text-[11px] text-[#584238] mt-0.5">Wallet</p>
+        </button>
+
+        <div className="bg-white rounded-2xl border border-stone-200/70 p-4">
+          <p className="text-xl font-extrabold text-[#3b6934] tabular-nums">{user.loyaltyPoints}</p>
+          <p className="text-[11px] text-[#584238] mt-0.5">Points</p>
+        </div>
+      </div>
+
+      {/* Details */}
+      <div className="px-4">
+        <div className="bg-white rounded-2xl border border-stone-200/70 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-extrabold text-sm text-[#1c1b1b]">Your details</h3>
+            {!editing && (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="text-xs font-bold text-[#9c3f00] active:opacity-60"
+              >
+                Edit
+              </button>
+            )}
           </div>
-          <span className="material-symbols-outlined text-5xl text-amber-300">workspace_premium</span>
+
+          {editing ? (
+            <form onSubmit={save} className="space-y-3">
+              {error && (
+                <p className="text-xs text-[#93000a] bg-[#ffdad6] rounded-xl px-3 py-2">{error}</p>
+              )}
+
+              <div className="space-y-1.5">
+                <label htmlFor="profile-name" className="block text-xs font-bold text-[#584238]">
+                  Name
+                </label>
+                <input
+                  id="profile-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full h-11 px-4 rounded-2xl bg-[#f6f3f2] border border-stone-200 text-sm outline-none focus:border-[#9c3f00] focus:ring-2 focus:ring-[#9c3f00]/15"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="profile-address"
+                  className="block text-xs font-bold text-[#584238]"
+                >
+                  Delivery address
+                </label>
+                <input
+                  id="profile-address"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Street, city, state"
+                  className="w-full h-11 px-4 rounded-2xl bg-[#f6f3f2] border border-stone-200 text-sm outline-none focus:border-[#9c3f00] focus:ring-2 focus:ring-[#9c3f00]/15"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="flex-1 h-11 rounded-full bg-[#9c3f00] text-white font-bold text-sm active:scale-[0.98] transition-transform disabled:opacity-60"
+                >
+                  {busy ? 'Saving…' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancel}
+                  className="px-5 h-11 rounded-full bg-stone-100 text-[#584238] font-bold text-sm active:scale-95 transition-transform"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <dl className="space-y-3">
+              <Row label="Phone" value={user.phone ?? 'Not set'} />
+              <Row label="Delivery address" value={user.defaultAddress ?? 'Not set'} />
+            </dl>
+          )}
         </div>
+      </div>
 
-        {/* Account Settings Menu List */}
-        <div className="bg-white rounded-3xl border border-stone-200/60 shadow-sm overflow-hidden divide-y divide-stone-100">
-          <button
-            onClick={() => onNavigate('location')}
-            className="w-full p-4 flex items-center justify-between hover:bg-stone-50 transition-colors text-left"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-[#ffdbcc] text-[#9c3f00]">
-                <span className="material-symbols-outlined">location_on</span>
-              </div>
-              <div>
-                <h4 className="font-bold text-sm text-[#1c1b1b]">Saved Delivery Addresses</h4>
-                <p className="text-xs text-[#584238]">1234 Westheimer Rd, Houston, TX 77006 (Default)</p>
-              </div>
-            </div>
-            <span className="material-symbols-outlined text-stone-400">chevron_right</span>
-          </button>
+      {/* Shortcuts */}
+      <div className="px-4 space-y-2">
+        <NavRow icon="receipt_long" label="Orders" onClick={() => onNavigate('transactions')} />
+        <NavRow
+          icon="account_balance_wallet"
+          label="Payment methods"
+          onClick={() => onNavigate('payment')}
+        />
+        <NavRow
+          icon="location_on"
+          label="Delivery address"
+          onClick={() => onNavigate('location')}
+        />
+      </div>
 
-          <button
-            onClick={() => onNavigate('payment')}
-            className="w-full p-4 flex items-center justify-between hover:bg-stone-50 transition-colors text-left"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-[#b9eeab] text-[#1E3F1B]">
-                <span className="material-symbols-outlined">credit_card</span>
-              </div>
-              <div>
-                <h4 className="font-bold text-sm text-[#1c1b1b]">Payment Methods & Digital Wallet</h4>
-                <p className="text-xs text-[#584238]">Apple Pay, Chase VISA ending 4242, Zelle</p>
-              </div>
-            </div>
-            <span className="material-symbols-outlined text-stone-400">chevron_right</span>
-          </button>
-
-          <button
-            onClick={() => onNavigate('transactions')}
-            className="w-full p-4 flex items-center justify-between hover:bg-stone-50 transition-colors text-left"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-stone-100 text-[#584238]">
-                <span className="material-symbols-outlined">history</span>
-              </div>
-              <div>
-                <h4 className="font-bold text-sm text-[#1c1b1b]">Spending & Order History</h4>
-                <p className="text-xs text-[#584238]">Download receipts & reorder favorites</p>
-              </div>
-            </div>
-            <span className="material-symbols-outlined text-stone-400">chevron_right</span>
-          </button>
-
-          <button
-            onClick={() => alert('Cuisine preferences updated to: West African, Halal, Organic')}
-            className="w-full p-4 flex items-center justify-between hover:bg-stone-50 transition-colors text-left"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-100 text-amber-800">
-                <span className="material-symbols-outlined">restaurant_menu</span>
-              </div>
-              <div>
-                <h4 className="font-bold text-sm text-[#1c1b1b]">Dietary & Spice Preferences</h4>
-                <p className="text-xs text-[#584238]">Halal, Organic Produce, High-Spice Suya</p>
-              </div>
-            </div>
-            <span className="material-symbols-outlined text-stone-400">chevron_right</span>
-          </button>
-
-          <button
-            onClick={() => {
-              if (onSignOut) onSignOut();
-              onNavigate('login');
-            }}
-            className="w-full p-4 flex items-center justify-between hover:bg-red-50 transition-colors text-left group"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-red-100 text-red-600">
-                <span className="material-symbols-outlined">logout</span>
-              </div>
-              <div>
-                <h4 className="font-bold text-sm text-red-600">Sign Out</h4>
-                <p className="text-xs text-red-400">Log out of Teedeux Mart on this device</p>
-              </div>
-            </div>
-            <span className="material-symbols-outlined text-red-400">chevron_right</span>
-          </button>
-        </div>
-      </main>
+      <div className="px-4 pt-2">
+        <button
+          type="button"
+          onClick={onSignOut}
+          className="w-full py-3.5 rounded-full bg-white border border-stone-200 text-[#9E2A2B] font-bold text-sm active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+        >
+          <span className="material-symbols-outlined text-lg">logout</span>
+          Sign out
+        </button>
+      </div>
     </div>
   );
 };
+
+const Row: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div>
+    <dt className="font-['JetBrains_Mono'] text-[9px] uppercase tracking-wider text-[#584238] font-bold">
+      {label}
+    </dt>
+    <dd className="text-sm text-[#1c1b1b] mt-0.5">{value}</dd>
+  </div>
+);
+
+const NavRow: React.FC<{ icon: string; label: string; onClick: () => void }> = ({
+  icon,
+  label,
+  onClick,
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="w-full flex items-center gap-3 p-3.5 bg-white rounded-2xl border border-stone-200/70 active:scale-[0.99] transition-transform text-left"
+  >
+    <span className="material-symbols-outlined text-[#9c3f00] shrink-0">{icon}</span>
+    <span className="flex-1 font-semibold text-sm text-[#1c1b1b]">{label}</span>
+    <span className="material-symbols-outlined text-stone-400 shrink-0">chevron_right</span>
+  </button>
+);

@@ -1,241 +1,192 @@
 import React, { useState } from 'react';
 import { ScreenId } from '../types';
+import type { ApiUser } from '../api/types';
+import { profileApi } from '../api/endpoints';
+import { BottomSheet } from './ui/BottomSheet';
 
 interface PaymentMethodsScreenProps {
   onNavigate: (screen: ScreenId) => void;
   walletBalance: number;
   loyaltyPoints: number;
-  onTopUpWallet?: (amount: number) => void;
+  onUserUpdated: (user: ApiUser) => void;
 }
+
+const QUICK_AMOUNTS = [25, 50, 100, 250];
+
+/** Cosmetic — no payment provider is wired up behind these. */
+const METHODS = [
+  { id: 'apple', label: 'Apple Pay', icon: 'phone_iphone' },
+  { id: 'card', label: 'Card ending 4412', icon: 'credit_card' },
+  { id: 'zelle', label: 'Zelle transfer', icon: 'account_balance' },
+] as const;
 
 export const PaymentMethodsScreen: React.FC<PaymentMethodsScreenProps> = ({
   onNavigate,
   walletBalance,
   loyaltyPoints,
-  onTopUpWallet,
+  onUserUpdated,
 }) => {
-  const [showTopUpModal, setShowTopUpModal] = useState(false);
-  const [topUpAmount, setTopUpAmount] = useState('100');
-  const [selectedProvider, setSelectedProvider] = useState<'apple' | 'card' | 'zelle'>('apple');
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [amount, setAmount] = useState('50');
+  const [method, setMethod] = useState<(typeof METHODS)[number]['id']>('apple');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleConfirmTopUp = (e: React.FormEvent) => {
+  const topUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    const val = parseFloat(topUpAmount);
-    if (!isNaN(val) && val > 0) {
-      if (onTopUpWallet) onTopUpWallet(val);
-      alert(`Successfully added $${val.toFixed(2)} to your Teedeux Wallet!`);
-      setShowTopUpModal(false);
+    setError(null);
+
+    const value = Number.parseFloat(amount);
+    if (!Number.isFinite(value) || value <= 0) {
+      setError('Enter an amount greater than zero');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const { user } = await profileApi.topUpWallet(value);
+      onUserUpdated(user);
+      setSheetOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Top-up failed');
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <div className="bg-[#fcf9f8] text-[#1c1b1b] min-h-screen pb-32 font-['Hanken_Grotesk']">
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        <div className="flex justify-between items-center border-b border-stone-200/60 pb-4">
-          <div>
-            <h1 className="text-3xl font-extrabold text-[#1c1b1b]">Digital Wallet & Payments</h1>
-            <p className="text-xs text-[#584238] font-['JetBrains_Mono'] mt-0.5">
-              Instant checkout with Apple Pay, Cards, Zelle, or Wallet Credits.
-            </p>
-          </div>
+    <div className="pb-6 space-y-4">
+      {/* Wallet */}
+      <div className="px-4 pt-3">
+        <div className="rounded-2xl bg-gradient-to-br from-[#9c3f00] to-[#c45100] text-white p-5">
+          <p className="font-['JetBrains_Mono'] text-[10px] uppercase tracking-wider text-white/80 font-bold">
+            Teedeux wallet
+          </p>
+          <p className="text-3xl font-extrabold mt-1 tabular-nums">${walletBalance.toFixed(2)}</p>
+          <p className="text-xs text-white/85 mt-1">{loyaltyPoints} loyalty points</p>
 
           <button
-            onClick={() => onNavigate('transactions')}
-            className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-[#584238] font-bold text-xs rounded-xl"
+            type="button"
+            onClick={() => setSheetOpen(true)}
+            className="mt-4 w-full py-3 rounded-full bg-white text-[#9c3f00] font-bold text-sm active:scale-[0.98] transition-transform"
           >
-            History
+            Add money
           </button>
         </div>
+      </div>
 
-        {/* Digital Wallet Card */}
-        <div className="bg-gradient-to-br from-[#9c3f00] via-[#c45100] to-[#762b00] text-white p-6 sm:p-8 rounded-3xl shadow-2xl relative overflow-hidden space-y-6">
-          <div className="flex justify-between items-start relative z-10">
-            <div>
-              <span className="font-['JetBrains_Mono'] text-xs font-bold uppercase tracking-wider text-amber-200">
-                Teedeux Pay Balance
+      {/* Methods */}
+      <div className="px-4 space-y-2">
+        <h2 className="font-extrabold text-sm text-[#1c1b1b] px-1">Payment methods</h2>
+        {METHODS.map((entry) => (
+          <div
+            key={entry.id}
+            className="flex items-center gap-3 p-3.5 bg-white rounded-2xl border border-stone-200/70"
+          >
+            <span className="material-symbols-outlined text-[#9c3f00] shrink-0">{entry.icon}</span>
+            <span className="flex-1 font-semibold text-sm text-[#1c1b1b]">{entry.label}</span>
+            {entry.id === 'apple' && (
+              <span className="px-2 py-0.5 rounded-md bg-[#b9eeab]/40 text-[#23501e] text-[10px] font-bold">
+                Default
               </span>
-              <h2 className="font-['Hanken_Grotesk'] text-4xl sm:text-5xl font-extrabold mt-1">
-                ${walletBalance.toFixed(2)}
-              </h2>
-            </div>
-            <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center">
-              <span className="material-symbols-outlined text-3xl">account_balance_wallet</span>
-            </div>
+            )}
           </div>
+        ))}
+      </div>
 
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 border-t border-white/20 relative z-10">
-            <div className="font-['JetBrains_Mono'] text-xs text-white/90">
-              <span>Loyalty Points: </span>
-              <strong className="text-amber-300 font-extrabold">{loyaltyPoints} pts</strong>
-              <span className="text-[10px] block text-white/70">
-                (Worth ${(loyaltyPoints * 0.1).toFixed(2)} discount)
-              </span>
-            </div>
+      <div className="px-4">
+        <button
+          type="button"
+          onClick={() => onNavigate('transactions')}
+          className="w-full flex items-center gap-3 p-3.5 bg-white rounded-2xl border border-stone-200/70 active:scale-[0.99] transition-transform text-left"
+        >
+          <span className="material-symbols-outlined text-[#9c3f00] shrink-0">receipt_long</span>
+          <span className="flex-1 font-semibold text-sm text-[#1c1b1b]">Order history</span>
+          <span className="material-symbols-outlined text-stone-400 shrink-0">chevron_right</span>
+        </button>
+      </div>
 
-            <button
-              onClick={() => setShowTopUpModal(true)}
-              className="px-6 py-3 bg-white text-[#9c3f00] rounded-xl font-extrabold text-xs uppercase tracking-wider hover:bg-amber-50 active:scale-95 transition-all shadow-lg flex items-center gap-1.5"
-            >
-              <span className="material-symbols-outlined text-base">add</span>
-              <span>Top Up Wallet</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Saved Payment Methods Section */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-extrabold text-[#1c1b1b]">Saved Payment Methods</h3>
-
-          <div className="space-y-3">
-            {/* Apple Pay */}
-            <div className="bg-white p-5 rounded-2xl border-2 border-[#9c3f00] shadow-md flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-black text-white font-extrabold text-xs flex items-center justify-center p-1 shadow-sm">
-                  Apple Pay
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-bold text-base text-[#1c1b1b]">Apple Pay</h4>
-                    <span className="bg-[#b9eeab] text-[#1E3F1B] text-[10px] font-bold px-2 py-0.5 rounded uppercase font-['JetBrains_Mono']">
-                      Default
-                    </span>
-                  </div>
-                  <p className="font-['JetBrains_Mono'] text-xs text-[#584238]">Express Touch ID / Face ID</p>
-                </div>
-              </div>
-              <span className="material-symbols-outlined text-[#9c3f00] fill-1 text-2xl">
-                check_circle
-              </span>
-            </div>
-
-            {/* Chase Visa Card */}
-            <div className="bg-white p-5 rounded-2xl border border-stone-200/60 shadow-sm flex justify-between items-center hover:border-blue-300 transition-colors">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-blue-900 text-white font-extrabold text-xs flex items-center justify-center p-1 shadow-sm">
-                  VISA
-                </div>
-                <div>
-                  <h4 className="font-bold text-base text-[#1c1b1b]">Chase Freedom Unlimited</h4>
-                  <p className="font-['JetBrains_Mono'] text-xs text-[#584238]">•••• •••• •••• 4242</p>
-                </div>
-              </div>
-              <button
-                onClick={() => alert('Set Chase VISA as default method')}
-                className="text-xs font-bold text-[#584238] hover:text-[#9c3f00]"
-              >
-                Set Default
-              </button>
-            </div>
-
-            {/* Zelle */}
-            <div className="bg-white p-5 rounded-2xl border border-stone-200/60 shadow-sm flex justify-between items-center hover:border-purple-300 transition-colors">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-purple-700 text-white font-extrabold text-xs flex items-center justify-center p-1 shadow-sm">
-                  Zelle
-                </div>
-                <div>
-                  <h4 className="font-bold text-base text-[#1c1b1b]">Zelle Direct Transfer</h4>
-                  <p className="font-['JetBrains_Mono'] text-xs text-[#584238]">marcus.vance@example.com</p>
-                </div>
-              </div>
-              <button
-                onClick={() => alert('Set Zelle as default method')}
-                className="text-xs font-bold text-[#584238] hover:text-[#9c3f00]"
-              >
-                Set Default
-              </button>
-            </div>
-          </div>
-
+      <BottomSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        title="Add money"
+        footer={
           <button
-            onClick={() => alert('Opening new payment method form...')}
-            className="w-full py-3.5 border-2 border-dashed border-stone-300 rounded-2xl text-[#584238] font-bold text-sm hover:border-[#9c3f00] hover:text-[#9c3f00] transition-all flex items-center justify-center gap-2"
+            type="submit"
+            form="top-up-form"
+            disabled={busy}
+            className="w-full h-12 rounded-full bg-[#9c3f00] text-white font-bold text-sm active:scale-[0.98] transition-transform disabled:opacity-60"
           >
-            <span className="material-symbols-outlined text-lg">add_card</span>
-            <span>Add New Card, Bank Account, or Apple Pay</span>
+            {busy ? 'Adding…' : `Add $${Number.parseFloat(amount || '0').toFixed(2)}`}
           </button>
-        </div>
-      </main>
+        }
+      >
+        <form id="top-up-form" onSubmit={topUp} className="px-5 py-4 space-y-4">
+          {error && (
+            <p className="text-xs text-[#93000a] bg-[#ffdad6] rounded-xl px-3 py-2">{error}</p>
+          )}
 
-      {/* Top Up Modal */}
-      {showTopUpModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white p-6 sm:p-8 rounded-3xl max-w-md w-full shadow-2xl space-y-4">
-            <div className="flex justify-between items-center border-b border-stone-100 pb-3">
-              <h3 className="font-extrabold text-lg text-[#1c1b1b]">Top Up Teedeux Wallet</h3>
+          <div className="grid grid-cols-4 gap-2">
+            {QUICK_AMOUNTS.map((value) => (
               <button
-                onClick={() => setShowTopUpModal(false)}
-                className="text-stone-400 hover:text-stone-600"
+                key={value}
+                type="button"
+                onClick={() => setAmount(String(value))}
+                className={`py-2.5 rounded-xl text-sm font-bold border transition-all ${
+                  amount === String(value)
+                    ? 'bg-[#9c3f00] text-white border-[#9c3f00]'
+                    : 'bg-white text-[#584238] border-stone-200'
+                }`}
               >
-                <span className="material-symbols-outlined">close</span>
+                ${value}
               </button>
-            </div>
-
-            <form onSubmit={handleConfirmTopUp} className="space-y-4">
-              <div>
-                <label className="font-['JetBrains_Mono'] text-xs font-bold text-[#584238] block mb-1">
-                  Amount (USD $)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={topUpAmount}
-                  onChange={(e) => setTopUpAmount(e.target.value)}
-                  className="w-full p-3 bg-stone-100 rounded-xl font-['Hanken_Grotesk'] font-extrabold text-2xl text-[#9c3f00] outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="font-['JetBrains_Mono'] text-xs font-bold text-[#584238] block mb-2">
-                  Select Provider
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedProvider('apple')}
-                    className={`p-3 rounded-xl font-bold text-xs border ${
-                      selectedProvider === 'apple'
-                        ? 'border-[#9c3f00] bg-[#ffdbcc]/40 text-[#9c3f00]'
-                        : 'border-stone-200'
-                    }`}
-                  >
-                    Apple Pay
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedProvider('card')}
-                    className={`p-3 rounded-xl font-bold text-xs border ${
-                      selectedProvider === 'card'
-                        ? 'border-[#9c3f00] bg-[#ffdbcc]/40 text-[#9c3f00]'
-                        : 'border-stone-200'
-                    }`}
-                  >
-                    Credit Card
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedProvider('zelle')}
-                    className={`p-3 rounded-xl font-bold text-xs border ${
-                      selectedProvider === 'zelle'
-                        ? 'border-[#9c3f00] bg-[#ffdbcc]/40 text-[#9c3f00]'
-                        : 'border-stone-200'
-                    }`}
-                  >
-                    Zelle
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-4 bg-[#9c3f00] text-white rounded-xl font-extrabold text-base hover:bg-[#c45100] shadow-lg"
-              >
-                Confirm Top Up (${topUpAmount})
-              </button>
-            </form>
+            ))}
           </div>
-        </div>
-      )}
+
+          <div className="space-y-1.5">
+            <label htmlFor="top-up-amount" className="block text-xs font-bold text-[#584238]">
+              Amount
+            </label>
+            <input
+              id="top-up-amount"
+              type="number"
+              min="1"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-full h-12 px-4 rounded-2xl bg-[#f6f3f2] border border-stone-200 text-sm outline-none focus:border-[#9c3f00] focus:ring-2 focus:ring-[#9c3f00]/15"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-bold text-[#584238]">Pay with</p>
+            {METHODS.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => setMethod(entry.id)}
+                className={`w-full flex items-center gap-3 p-3 rounded-2xl border transition-all ${
+                  method === entry.id
+                    ? 'border-[#9c3f00] bg-[#ffdbcc]/40'
+                    : 'border-stone-200 bg-white'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[#9c3f00] shrink-0">
+                  {entry.icon}
+                </span>
+                <span className="flex-1 text-left font-semibold text-sm text-[#1c1b1b]">
+                  {entry.label}
+                </span>
+                {method === entry.id && (
+                  <span className="material-symbols-outlined text-[#9c3f00] text-lg fill-1">
+                    check_circle
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </form>
+      </BottomSheet>
     </div>
   );
 };

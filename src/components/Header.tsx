@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Product, ScreenId, Store } from '../types';
-import { mockProducts, mockStores } from '../data/mockData';
 
 interface HeaderProps {
   currentScreen: ScreenId;
   onNavigate: (screen: ScreenId) => void;
+  /** Catalog the search box filters over. */
+  products: Product[];
+  stores: Store[];
   address?: string;
   showBack?: boolean;
   onBack?: () => void;
@@ -33,6 +35,8 @@ const TITLE_ONLY: Record<string, string> = {
 export const Header: React.FC<HeaderProps> = ({
   currentScreen,
   onNavigate,
+  products,
+  stores,
   address = '1234 Westheimer Rd, Houston, TX',
   showBack,
   onBack,
@@ -62,7 +66,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   const query = searchQuery.trim().toLowerCase();
   const matchedProducts = query
-    ? mockProducts
+    ? products
         .filter(
           (p) =>
             p.name.toLowerCase().includes(query) ||
@@ -74,7 +78,7 @@ export const Header: React.FC<HeaderProps> = ({
     : [];
 
   const matchedStores = query
-    ? mockStores.filter(
+    ? stores.filter(
         (s) =>
           s.name.toLowerCase().includes(query) ||
           s.tagline.toLowerCase().includes(query) ||
@@ -97,7 +101,8 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const openProductStore = (product: Product) => {
-    const store = mockStores.find((s) => s.id === product.storeId) ?? mockStores[0];
+    const store = stores.find((s) => s.id === product.storeId);
+    if (!store) return;
     openStore(store);
   };
 

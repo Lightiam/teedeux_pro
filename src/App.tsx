@@ -1,7 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Product, ProductCategory, ScreenId, Store, UserProfile } from './types';
-import { mockProducts, mockStores, mockUserProfile } from './data/mockData';
-import { useCart } from './hooks/useCart';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Product, ProductCategory, ScreenId, Store } from './types';
+import type { ApiOrder, ApiOrderStatus } from './api/types';
+import { orderApi } from './api/endpoints';
+import { useAuth } from './context/AuthContext';
+import { useBuyItAgain, useCatalog } from './hooks/useCatalog';
+import { useServerCart } from './hooks/useServerCart';
 import { registerHardwareBack } from './native';
 
 import { Header } from './components/Header';
@@ -28,24 +31,89 @@ import { DemoNavigator } from './components/DemoNavigator';
 /** Screens reachable from a tab — landing on one shouldn't offer a back arrow. */
 const ROOT_SCREENS: ScreenId[] = ['home', 'stores', 'buy-it-again', 'cart', 'profile'];
 
+/** Phone shell: full-bleed on a handset, centred device frame on desktop. */
+const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="min-h-screen bg-stone-300/60 flex justify-center">
+    <div className="w-full max-w-[430px] min-h-screen bg-[#fcf9f8] text-[#1c1b1b] flex flex-col relative shadow-2xl font-['Hanken_Grotesk'] selection:bg-[#9c3f00] selection:text-white">
+      {children}
+    </div>
+  </div>
+);
+
 export default function App() {
+  const auth = useAuth();
+
+  if (auth.isLoading) return <BootScreen />;
+  if (!auth.isAuthenticated) return <AuthFlow />;
+  return <Shop />;
+}
+
+/** Shown while a stored token is validated, so the app never flashes the login screen. */
+const BootScreen: React.FC = () => (
+  <Shell>
+    <div className="flex-1 flex flex-col items-center justify-center gap-4">
+      <div className="h-16 w-16 rounded-2xl bg-[#9c3f00] text-white flex items-center justify-center font-extrabold text-3xl">
+        T
+      </div>
+      <span className="h-5 w-5 rounded-full border-2 border-[#9c3f00]/30 border-t-[#9c3f00] animate-spin" />
+    </div>
+  </Shell>
+);
+
+/** Sign-in, sign-up and reset. The shop is unreachable until one succeeds. */
+const AuthFlow: React.FC = () => {
+  const [screen, setScreen] = useState<ScreenId>('login');
+
+  return (
+    <Shell>
+      <div className="flex-1 flex flex-col">
+        {screen === 'signup' ? (
+          <SignupScreen onNavigate={setScreen} />
+        ) : screen === 'reset-password' ? (
+          <ResetPasswordScreen onNavigate={setScreen} />
+        ) : (
+          <LoginScreen onNavigate={setScreen} />
+        )}
+      </div>
+    </Shell>
+  );
+};
+
+function Shop() {
+  const { user, logout, setUser } = useAuth();
+  const catalog = useCatalog();
+  const cart = useServerCart(true);
+  const buyItAgain = useBuyItAgain(true);
+
   const [currentScreen, setCurrentScreen] = useState<ScreenId>('home');
   const [history, setHistory] = useState<ScreenId[]>([]);
-  const [selectedStore, setSelectedStore] = useState<Store>(mockStores[0]);
+  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
   const [selectedAisle, setSelectedAisle] = useState<ProductCategory | 'all'>('all');
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
-  const [deliveryAddress, setDeliveryAddress] = useState(
-    '1234 Westheimer Rd, Houston, TX 77006'
-  );
-  const [userProfile, setUserProfile] = useState<UserProfile>(mockUserProfile);
 
-  const cart = useCart(
-    [
-      { product: mockProducts[0], quantity: 2 },
-      { product: mockProducts[3], quantity: 1 },
-    ],
-    mockStores
-  );
+  const [orders, setOrders] = useState<ApiOrder[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [trackedOrderId, setTrackedOrderId] = useState<string | null>(null);
+
+  const address = user?.defaultAddress ?? 'Set a delivery address';
+
+  const loadOrders = useCallback(async () => {
+    setOrdersLoading(true);
+    try {
+      const { orders: loaded } = await orderApi.list();
+      setOrders(loaded);
+      setOrdersError(null);
+    } catch (err) {
+      setOrdersError(err instanceof Error ? err.message : 'Could not load your orders');
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadOrders();
+  }, [loadOrders]);
 
   /**
    * Push the outgoing screen onto history so the back arrow can unwind it.
@@ -93,17 +161,31 @@ export default function App() {
   const openProduct = (product: Product) => setActiveProduct(product);
 
   const viewProductStore = (product: Product) => {
-    const store = mockStores.find((s) => s.id === product.storeId) ?? mockStores[0];
+    const store = catalog.stores.find((s) => s.id === product.storeId);
+    if (!store) return;
     setActiveProduct(null);
     setSelectedStore(store);
     navigate('store-detail');
   };
 
-  const handleTopUpWallet = (amount: number) => {
-    setUserProfile((prev) => ({ ...prev, walletBalance: prev.walletBalance + amount }));
+  const handleCheckout = async () => {
+    await orderApi.checkout({ deliveryAddress: user?.defaultAddress ?? undefined });
+    await Promise.all([cart.refresh(), loadOrders()]);
+    setTrackedOrderId(null);
+    navigate('order-tracking');
   };
 
-  const browseAisle = (aisle: ProductCategory | 'all') => setSelectedAisle(aisle);
+  const advanceOrder = async (orderId: string, status: ApiOrderStatus) => {
+    const { order } = await orderApi.setStatus(orderId, status);
+    setOrders((current) => current.map((o) => (o.id === order.id ? order : o)));
+  };
+
+  const trackedOrder =
+    orders.find((order) => order.id === trackedOrderId) ??
+    // Default to the newest order that hasn't finished yet, then the newest overall.
+    orders.find((order) => order.status !== 'delivered' && order.status !== 'cancelled') ??
+    orders[0] ??
+    null;
 
   const catalogProps = {
     onOpenProduct: openProduct,
@@ -115,122 +197,195 @@ export default function App() {
   const showBack = !ROOT_SCREENS.includes(currentScreen) && history.length > 0;
 
   return (
-    /* Phone shell: full-bleed on a handset, centred device frame on a desktop browser. */
-    <div className="min-h-screen bg-stone-300/60 flex justify-center">
-      <div className="w-full max-w-[430px] min-h-screen bg-[#fcf9f8] text-[#1c1b1b] flex flex-col relative shadow-2xl font-['Hanken_Grotesk'] selection:bg-[#9c3f00] selection:text-white">
-        <DemoNavigator currentScreen={currentScreen} onNavigate={navigate} />
+    <Shell>
+      <DemoNavigator currentScreen={currentScreen} onNavigate={navigate} />
 
-        <Header
-          currentScreen={currentScreen}
-          onNavigate={navigate}
-          address={deliveryAddress}
-          titleOverride={currentScreen === 'store-detail' ? selectedStore.name : undefined}
-          showBack={showBack}
-          onBack={goBack}
-          onAddToCart={cart.addItem}
-          onSelectStore={setSelectedStore}
-        />
+      <Header
+        currentScreen={currentScreen}
+        onNavigate={navigate}
+        products={catalog.products}
+        stores={catalog.stores}
+        address={address}
+        titleOverride={
+          currentScreen === 'store-detail' ? (selectedStore?.name ?? 'Hub') : undefined
+        }
+        showBack={showBack}
+        onBack={goBack}
+        onAddToCart={cart.addItem}
+        onSelectStore={setSelectedStore}
+      />
 
-        <main className="flex-1 overflow-x-hidden">
-          {currentScreen === 'splash' && <SplashScreen onNavigate={navigate} />}
+      <main className="flex-1 overflow-x-hidden">
+        {catalog.error && currentScreen === 'home' && (
+          <div className="mx-4 mt-3 rounded-2xl bg-[#ffdad6] text-[#93000a] px-4 py-3 text-xs font-semibold">
+            {catalog.error}{' '}
+            <button type="button" onClick={catalog.reload} className="underline font-bold">
+              Retry
+            </button>
+          </div>
+        )}
 
-          {currentScreen === 'onboarding-discover' && (
-            <OnboardingDiscoverScreen onNavigate={navigate} />
-          )}
+        {currentScreen === 'splash' && <SplashScreen onNavigate={navigate} />}
 
-          {currentScreen === 'onboarding-schedule' && (
-            <OnboardingScheduleScreen onNavigate={navigate} />
-          )}
+        {currentScreen === 'onboarding-discover' && (
+          <OnboardingDiscoverScreen onNavigate={navigate} />
+        )}
 
-          {currentScreen === 'location' && (
-            <LocationSelectorScreen
-              onNavigate={navigate}
-              onSelectAddress={setDeliveryAddress}
-              currentAddress={deliveryAddress}
-            />
-          )}
+        {currentScreen === 'onboarding-schedule' && (
+          <OnboardingScheduleScreen onNavigate={navigate} />
+        )}
 
-          {currentScreen === 'login' && <LoginScreen onNavigate={navigate} />}
-          {currentScreen === 'signup' && <SignupScreen onNavigate={navigate} />}
-          {currentScreen === 'reset-password' && <ResetPasswordScreen onNavigate={navigate} />}
+        {currentScreen === 'location' && (
+          <LocationSelectorScreen
+            onNavigate={navigate}
+            onSelectAddress={(next) => {
+              // Persist to the profile so checkout and the header agree.
+              if (user) setUser({ ...user, defaultAddress: next });
+            }}
+            currentAddress={address}
+          />
+        )}
 
-          {currentScreen === 'home' && (
+        {currentScreen === 'home' &&
+          (catalog.isLoading ? (
+            <CatalogSkeleton />
+          ) : (
             <HomeScreen
+              stores={catalog.stores}
+              products={catalog.products}
+              aisles={catalog.aisles}
+              buyItAgain={buyItAgain.products}
               onNavigate={navigate}
               onSelectStore={setSelectedStore}
-              onSelectAisle={browseAisle}
+              onSelectAisle={setSelectedAisle}
               {...catalogProps}
             />
-          )}
+          ))}
 
-          {currentScreen === 'stores' && (
+        {currentScreen === 'stores' &&
+          (catalog.isLoading ? (
+            <CatalogSkeleton />
+          ) : (
             <StoresScreen
+              stores={catalog.stores}
+              products={catalog.products}
+              aisles={catalog.aisles}
               onNavigate={navigate}
               onSelectStore={setSelectedStore}
               selectedAisle={selectedAisle}
-              onSelectAisle={browseAisle}
+              onSelectAisle={setSelectedAisle}
               {...catalogProps}
             />
-          )}
+          ))}
 
-          {currentScreen === 'store-detail' && (
+        {currentScreen === 'store-detail' &&
+          (selectedStore ? (
             <StoreDetailScreen
               store={selectedStore}
+              products={catalog.products}
+              aisles={catalog.aisles}
               onNavigate={navigate}
               {...catalogProps}
             />
-          )}
+          ) : (
+            <CatalogSkeleton />
+          ))}
 
-          {currentScreen === 'buy-it-again' && (
-            <BuyItAgainScreen onNavigate={navigate} {...catalogProps} />
-          )}
+        {currentScreen === 'buy-it-again' && (
+          <BuyItAgainScreen
+            products={buyItAgain.products}
+            isLoading={buyItAgain.isLoading}
+            onNavigate={navigate}
+            {...catalogProps}
+          />
+        )}
 
-          {currentScreen === 'cart' && (
-            <CartScreen
-              storeCarts={cart.storeCarts}
-              subtotal={cart.subtotal}
-              onSetQuantity={cart.setQuantity}
-              onClearStore={cart.clearStore}
-              onNavigate={navigate}
-            />
-          )}
+        {currentScreen === 'cart' && (
+          <CartScreen
+            storeCarts={cart.storeCarts}
+            totals={cart.totals}
+            promoValid={cart.promoValid}
+            isLoading={cart.isLoading}
+            error={cart.error}
+            onSetQuantity={cart.setQuantity}
+            onClearStore={cart.clearStore}
+            onApplyPromo={cart.applyPromo}
+            onCheckout={handleCheckout}
+            onNavigate={navigate}
+          />
+        )}
 
-          {currentScreen === 'order-tracking' && <OrderTrackingScreen onNavigate={navigate} />}
-          {currentScreen === 'transactions' && <TransactionsScreen onNavigate={navigate} />}
+        {currentScreen === 'order-tracking' && (
+          <OrderTrackingScreen
+            order={trackedOrder}
+            isLoading={ordersLoading}
+            onNavigate={navigate}
+            onAdvance={advanceOrder}
+          />
+        )}
 
-          {currentScreen === 'profile' && (
-            <ProfileScreen
-              user={userProfile}
-              onNavigate={navigate}
-              onSignOut={() => navigate('login')}
-            />
-          )}
+        {currentScreen === 'transactions' && (
+          <TransactionsScreen
+            orders={orders}
+            isLoading={ordersLoading}
+            error={ordersError}
+            onNavigate={navigate}
+            onSelectOrder={(order) => {
+              setTrackedOrderId(order.id);
+              navigate('order-tracking');
+            }}
+          />
+        )}
 
-          {currentScreen === 'payment' && (
-            <PaymentMethodsScreen
-              onNavigate={navigate}
-              walletBalance={userProfile.walletBalance}
-              loyaltyPoints={userProfile.loyaltyPoints}
-              onTopUpWallet={handleTopUpWallet}
-            />
-          )}
-        </main>
+        {currentScreen === 'profile' && user && (
+          <ProfileScreen
+            user={user}
+            onNavigate={navigate}
+            onSignOut={logout}
+            onUserUpdated={setUser}
+          />
+        )}
 
-        <ProductSheet
-          product={activeProduct}
-          quantity={activeProduct ? cart.quantityOf(activeProduct.id) : 0}
-          onClose={() => setActiveProduct(null)}
-          onIncrement={cart.addItem}
-          onDecrement={cart.decrementItem}
-          onViewStore={viewProductStore}
-        />
+        {currentScreen === 'payment' && user && (
+          <PaymentMethodsScreen
+            onNavigate={navigate}
+            walletBalance={user.walletBalance}
+            loyaltyPoints={user.loyaltyPoints}
+            onUserUpdated={setUser}
+          />
+        )}
+      </main>
 
-        <Navbar
-          currentScreen={currentScreen}
-          onNavigate={navigate}
-          cartCount={cart.totalCount}
-        />
-      </div>
-    </div>
+      <ProductSheet
+        product={activeProduct}
+        quantity={activeProduct ? cart.quantityOf(activeProduct.id) : 0}
+        onClose={() => setActiveProduct(null)}
+        onIncrement={cart.addItem}
+        onDecrement={cart.decrementItem}
+        onViewStore={viewProductStore}
+      />
+
+      <Navbar currentScreen={currentScreen} onNavigate={navigate} cartCount={cart.totalCount} />
+    </Shell>
   );
 }
+
+/** Placeholder tiles shown while the catalog request is in flight. */
+const CatalogSkeleton: React.FC = () => (
+  <div className="px-4 pt-4 space-y-5">
+    <div className="h-16 rounded-2xl bg-stone-200/70 animate-pulse" />
+    <div className="flex gap-3 overflow-hidden">
+      {Array.from({ length: 3 }, (_, i) => (
+        <div key={i} className="h-32 w-[10.5rem] shrink-0 rounded-2xl bg-stone-200/70 animate-pulse" />
+      ))}
+    </div>
+    <div className="grid grid-cols-2 gap-x-3 gap-y-5">
+      {Array.from({ length: 4 }, (_, i) => (
+        <div key={i}>
+          <div className="aspect-square w-full rounded-2xl bg-stone-200/70 animate-pulse mb-2" />
+          <div className="h-3.5 w-1/3 rounded bg-stone-200/70 animate-pulse" />
+        </div>
+      ))}
+    </div>
+  </div>
+);

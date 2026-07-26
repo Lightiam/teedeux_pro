@@ -1,227 +1,245 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ScreenId } from '../types';
+import type { ApiOrder, ApiOrderStatus } from '../api/types';
 
 interface OrderTrackingScreenProps {
+  order: ApiOrder | null;
+  isLoading: boolean;
   onNavigate: (screen: ScreenId) => void;
+  onAdvance: (orderId: string, status: ApiOrderStatus) => Promise<void>;
 }
 
-export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({ onNavigate }) => {
-  const [courierPos, setCourierPos] = useState({ x: 35, y: 40 });
-  const [activeStep, setActiveStep] = useState(3);
-  const [minutesLeft, setMinutesLeft] = useState(18);
+interface Step {
+  status: ApiOrderStatus;
+  label: string;
+  detail: string;
+  icon: string;
+}
 
-  // Smooth courier moped movement animation along simulated map route
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCourierPos((prev) => {
-        const nextX = prev.x + 0.8;
-        const nextY = prev.y + 0.4;
-        if (nextX > 75) {
-          return { x: 35, y: 40 };
-        }
-        return { x: nextX, y: nextY };
-      });
+const STEPS: Step[] = [
+  { status: 'placed', label: 'Order placed', detail: 'We have your order', icon: 'receipt_long' },
+  { status: 'shopping', label: 'Being shopped', detail: 'Picking your items', icon: 'shopping_basket' },
+  { status: 'packed', label: 'Packed', detail: 'Sealed and labelled', icon: 'inventory_2' },
+  { status: 'in_transit', label: 'On the way', detail: 'Out for delivery', icon: 'local_shipping' },
+  { status: 'delivered', label: 'Delivered', detail: 'Enjoy your order', icon: 'home' },
+];
 
-      setMinutesLeft((prev) => (prev > 1 ? prev - 1 : 18));
-    }, 2000);
+export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
+  order,
+  isLoading,
+  onNavigate,
+  onAdvance,
+}) => {
+  const [busy, setBusy] = useState(false);
 
-    return () => clearInterval(interval);
-  }, []);
+  if (isLoading) {
+    return (
+      <div className="px-4 pt-4 space-y-3">
+        <div className="h-24 rounded-2xl bg-stone-200/70 animate-pulse" />
+        <div className="h-64 rounded-2xl bg-stone-200/70 animate-pulse" />
+      </div>
+    );
+  }
+
+  if (!order) {
+    return (
+      <div className="text-center py-20 px-6">
+        <span className="material-symbols-outlined text-5xl text-stone-300">local_shipping</span>
+        <h3 className="text-base font-bold text-[#1c1b1b] mt-2">Nothing to track</h3>
+        <p className="text-sm text-[#584238] mt-1">
+          Place an order and you can follow it here.
+        </p>
+        <button
+          type="button"
+          onClick={() => onNavigate('stores')}
+          className="mt-4 px-5 py-2.5 bg-[#9c3f00] text-white rounded-full text-sm font-bold active:scale-95 transition-transform"
+        >
+          Start shopping
+        </button>
+      </div>
+    );
+  }
+
+  const isCancelled = order.status === 'cancelled';
+  const currentIndex = STEPS.findIndex((step) => step.status === order.status);
+  const nextStep = currentIndex >= 0 ? STEPS[currentIndex + 1] : undefined;
+
+  const advance = async (status: ApiOrderStatus) => {
+    setBusy(true);
+    try {
+      await onAdvance(order.id, status);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
-    <div className="bg-[#fcf9f8] text-[#1c1b1b] min-h-screen pb-28 font-['Hanken_Grotesk']">
-      <main className="max-w-5xl mx-auto px-4 sm:px-8 py-6 space-y-6">
-        {/* Header Order Bar */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-5 rounded-3xl border border-stone-200/60 shadow-sm gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-[#9c3f00] fill-1">local_shipping</span>
-              <h1 className="text-2xl font-extrabold text-[#1c1b1b]">Order #TDX-8849</h1>
-            </div>
-            <p className="font-['JetBrains_Mono'] text-xs text-[#584238] mt-1">
-              From: <strong className="text-[#9c3f00]">Teeduex Market (Houston Hub)</strong> • Delivered to: 1234 Westheimer Rd, Houston, TX
+    <div className="pb-6 space-y-4">
+      {/* Order summary */}
+      <div className="px-4 pt-3">
+        <div className="bg-white rounded-2xl border border-stone-200/70 p-4 flex items-center gap-3">
+          <img
+            src={order.storeImageUrl}
+            alt=""
+            className="h-12 w-12 rounded-xl object-cover bg-stone-100 shrink-0"
+          />
+          <div className="min-w-0 flex-1">
+            <h2 className="font-bold text-sm text-[#1c1b1b] truncate">{order.storeName}</h2>
+            <p className="font-['JetBrains_Mono'] text-[10px] text-stone-500 mt-0.5 truncate">
+              {order.id}
             </p>
           </div>
+          <span className="font-extrabold text-sm text-[#9c3f00] tabular-nums shrink-0">
+            ${order.total.toFixed(2)}
+          </span>
+        </div>
+      </div>
 
-          <div className="flex items-center gap-3">
-            <span className="bg-[#b9eeab] text-[#1E3F1B] px-4 py-1.5 rounded-full font-['JetBrains_Mono'] text-xs font-bold flex items-center gap-1.5 shadow-sm">
-              <span className="w-2 h-2 rounded-full bg-[#1E3F1B] animate-ping"></span>
-              In Transit
-            </span>
-            <button
-              onClick={() => onNavigate('transactions')}
-              className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-[#584238] font-bold text-xs rounded-xl"
+      {/* Progress */}
+      <div className="px-4">
+        <div className="bg-white rounded-2xl border border-stone-200/70 p-4">
+          {isCancelled ? (
+            <div className="flex items-center gap-3 text-[#93000a]">
+              <span className="material-symbols-outlined text-2xl">cancel</span>
+              <div>
+                <p className="font-bold text-sm">Order cancelled</p>
+                <p className="text-xs text-[#584238] mt-0.5">This order will not be delivered.</p>
+              </div>
+            </div>
+          ) : (
+            <ol className="space-y-0">
+              {STEPS.map((step, index) => {
+                const isDone = index < currentIndex;
+                const isCurrent = index === currentIndex;
+                const isLast = index === STEPS.length - 1;
+
+                return (
+                  <li key={step.status} className="flex gap-3">
+                    {/* Rail */}
+                    <div className="flex flex-col items-center">
+                      <div
+                        className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                          isDone
+                            ? 'bg-[#3b6934] text-white'
+                            : isCurrent
+                              ? 'bg-[#9c3f00] text-white'
+                              : 'bg-stone-100 text-stone-400'
+                        }`}
+                      >
+                        <span
+                          className={`material-symbols-outlined text-lg ${
+                            isDone || isCurrent ? 'fill-1' : ''
+                          }`}
+                        >
+                          {isDone ? 'check' : step.icon}
+                        </span>
+                      </div>
+                      {!isLast && (
+                        <div
+                          className={`w-0.5 flex-1 min-h-[1.75rem] ${
+                            isDone ? 'bg-[#3b6934]' : 'bg-stone-200'
+                          }`}
+                        />
+                      )}
+                    </div>
+
+                    {/* Copy */}
+                    <div className={`pb-5 ${isLast ? 'pb-0' : ''}`}>
+                      <p
+                        className={`text-sm font-bold ${
+                          isDone || isCurrent ? 'text-[#1c1b1b]' : 'text-stone-400'
+                        }`}
+                      >
+                        {step.label}
+                      </p>
+                      <p className="text-xs text-[#584238] mt-0.5">{step.detail}</p>
+                      {isCurrent && (
+                        <span className="inline-block mt-1.5 px-2 py-0.5 rounded-md bg-[#ffdbcc] text-[#9c3f00] text-[10px] font-bold">
+                          Current
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </div>
+      </div>
+
+      {/* Delivery address */}
+      <div className="px-4">
+        <div className="bg-white rounded-2xl border border-stone-200/70 p-4 flex items-start gap-3">
+          <span className="material-symbols-outlined text-[#9c3f00] fill-1 shrink-0">
+            location_on
+          </span>
+          <div className="min-w-0">
+            <p className="font-['JetBrains_Mono'] text-[9px] uppercase tracking-wider text-[#584238] font-bold">
+              Delivering to
+            </p>
+            <p className="text-sm text-[#1c1b1b] mt-0.5">{order.deliveryAddress}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Items */}
+      <div className="px-4">
+        <div className="bg-white rounded-2xl border border-stone-200/70 overflow-hidden">
+          {order.items.map((item) => (
+            <div
+              key={item.productId}
+              className="flex items-center gap-3 p-3 border-b border-stone-50 last:border-b-0"
             >
-              View Receipt
+              <img
+                src={item.imageUrl}
+                alt=""
+                className="h-12 w-12 rounded-xl object-contain bg-[#f6f3f2] shrink-0"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-semibold text-[#1c1b1b] line-clamp-2 leading-snug">
+                  {item.name}
+                </p>
+                <p className="font-['JetBrains_Mono'] text-[10px] text-stone-500 mt-0.5">
+                  {item.weightOrUnit} × {item.quantity}
+                </p>
+              </div>
+              <span className="font-bold text-sm text-[#9c3f00] tabular-nums shrink-0">
+                ${(item.unitPrice * item.quantity).toFixed(2)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/*
+        Standing in for the courier and warehouse systems that would drive
+        status in production, so the flow can be walked end to end.
+      */}
+      {!isCancelled && nextStep && (
+        <div className="px-4 space-y-2">
+          <p className="font-['JetBrains_Mono'] text-[10px] uppercase tracking-wider text-[#584238] font-bold px-1">
+            Demo controls
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => advance(nextStep.status)}
+              className="flex-1 py-3 rounded-full bg-[#9c3f00] text-white font-bold text-sm active:scale-[0.98] transition-transform disabled:opacity-60"
+            >
+              Advance to {nextStep.label.toLowerCase()}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => advance('cancelled')}
+              className="px-5 py-3 rounded-full bg-white border border-stone-200 text-[#9E2A2B] font-bold text-sm active:scale-95 transition-transform disabled:opacity-60"
+            >
+              Cancel
             </button>
           </div>
         </div>
-
-        {/* Map View & Live ETA Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Map Column */}
-          <div className="lg:col-span-7 bg-stone-200 h-[380px] sm:h-[420px] rounded-3xl overflow-hidden relative shadow-inner border border-stone-300">
-            {/* Map Canvas Background Image */}
-            <div
-              className="absolute inset-0 bg-cover bg-center opacity-85"
-              style={{
-                backgroundImage:
-                  "url('https://lh3.googleusercontent.com/aida-public/AB6AXuCuTl7nxBMbTAZCqr84C_j8-GriBKTKEavwJmaIwEJH9fGDe7nFDKbruTq4UBpXRD5oDNmyHCvMXh1zw2T_aAOKKGdV0ChXeuu7suxRYBp1y52MaSkUao7QdHcEavCFzHpD7zLUHRvPDPXCSVmHFxoABDqhNyHWRfjQ9gubzNe7JHng-O-tUSmKpO9q83wd9aVowiAP_QBVaCXSmpXuUdzApn97PCk9xuXx8UtpRCWVKSBX0RKQyXMGKA')",
-              }}
-            ></div>
-
-            {/* SVG Animated Route Line */}
-            <svg className="absolute inset-0 w-full h-full pointer-events-none">
-              <path
-                d="M 120 100 Q 220 180 400 280"
-                fill="none"
-                stroke="#9c3f00"
-                strokeWidth="5"
-                strokeDasharray="8 8"
-                className="dash-move"
-              />
-            </svg>
-
-            {/* Store Location Pin */}
-            <div className="absolute top-[80px] left-[100px] z-10 flex flex-col items-center">
-              <div className="bg-white text-[#9c3f00] p-2 rounded-full shadow-xl border-2 border-[#9c3f00] flex items-center justify-center">
-                <span className="material-symbols-outlined text-lg fill-1">storefront</span>
-              </div>
-              <span className="bg-white/90 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold text-[#1c1b1b] shadow mt-1">
-                Mama Jones
-              </span>
-            </div>
-
-            {/* Moving Courier Pin (Van) */}
-            <div
-              className="absolute z-20 flex flex-col items-center transition-all duration-1000 ease-linear"
-              style={{ left: `${courierPos.x}%`, top: `${courierPos.y}%` }}
-            >
-              <div className="bg-[#9c3f00] text-white p-2.5 rounded-full shadow-2xl border-2 border-white flex items-center justify-center animate-bounce">
-                <span className="material-symbols-outlined text-xl">directions_car</span>
-              </div>
-              <span className="bg-[#1E3F1B] text-white px-2 py-0.5 rounded-full font-['JetBrains_Mono'] text-[10px] font-bold shadow mt-1">
-                Marcus (Express)
-              </span>
-            </div>
-
-            {/* Destination Pin */}
-            <div className="absolute bottom-[100px] right-[100px] z-10 flex flex-col items-center">
-              <div className="bg-[#1E3F1B] text-white p-2 rounded-full shadow-xl border-2 border-white flex items-center justify-center">
-                <span className="material-symbols-outlined text-lg fill-1">home</span>
-              </div>
-              <span className="bg-white/90 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold text-[#1c1b1b] shadow mt-1">
-                Westheimer Rd
-              </span>
-            </div>
-
-            {/* Live ETA Card Overlay */}
-            <div className="absolute top-4 left-4 right-4 bg-white/95 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-white/60 flex items-center justify-between">
-              <div>
-                <p className="font-['JetBrains_Mono'] text-[10px] font-bold text-[#584238] uppercase">
-                  Estimated Arrival
-                </p>
-                <h3 className="font-extrabold text-2xl text-[#9c3f00] font-['Hanken_Grotesk']">
-                  {minutesLeft} mins
-                </h3>
-              </div>
-              <div className="text-right">
-                <p className="font-['JetBrains_Mono'] text-xs text-[#1E3F1B] font-bold">
-                  On Time (2:45 PM)
-                </p>
-                <p className="text-[11px] text-[#584238]">Distance: 2.4 km remaining</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Courier Info & Status Column */}
-          <div className="lg:col-span-5 space-y-4">
-            {/* Courier Driver Card */}
-            <div className="bg-white p-5 rounded-3xl border border-stone-200/60 shadow-sm space-y-4">
-              <div className="flex items-center gap-4">
-                <img
-                  className="w-14 h-14 rounded-full object-cover border-2 border-[#9c3f00] p-0.5 shadow-md"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuAGGIlnUs7TM4C7HPj7ISS3Ws-7hsSTGNRJdkLejot52xMAhxSCa1KMF4cpO141BH7geMjHWc3nPL68ltDkjtkQEG_-kFluuHks9LUEo2BWYitZ0j7s8ghDzY36reA6p5bV22Tx0Zf2ehuABdwwcraUp2YvdQRwdIFQGrcT-2gQViA6qzHziR4QAHF1zkJq6MmgxH384jHdUjUr96c4reGXTQWmYEj1cCjPxeZq_Fbn8SM66UOV7UAPoA"
-                  alt="Courier Marcus Johnson"
-                />
-                <div className="flex-grow">
-                  <div className="flex justify-between items-start">
-                    <h3 className="font-extrabold text-base text-[#1c1b1b]">Marcus Johnson</h3>
-                    <div className="flex items-center gap-1 text-[#3b6934] font-bold text-xs bg-[#b9eeab]/30 px-2 py-0.5 rounded-md">
-                      <span className="material-symbols-outlined text-xs fill-1">star</span>
-                      <span>4.9</span>
-                    </div>
-                  </div>
-                  <p className="font-['JetBrains_Mono'] text-xs text-[#584238]">
-                    Ford E-Transit Van (Houston HQ) • 1,240 Deliveries
-                  </p>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <button
-                  onClick={() => alert('Calling driver Marcus Johnson (+1 713-555-0199)...')}
-                  className="py-2.5 px-4 bg-[#9c3f00] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-[#c45100] transition-colors shadow-md"
-                >
-                  <span className="material-symbols-outlined text-base">call</span>
-                  <span>Call Courier</span>
-                </button>
-                <button
-                  onClick={() => alert('Opening live chat with Marcus...')}
-                  className="py-2.5 px-4 bg-stone-100 text-[#584238] rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-stone-200 transition-colors"
-                >
-                  <span className="material-symbols-outlined text-base">chat</span>
-                  <span>Chat Courier</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Timeline Steps */}
-            <div className="bg-white p-5 rounded-3xl border border-stone-200/60 shadow-sm space-y-4">
-              <h3 className="font-bold text-sm text-[#1c1b1b]">Delivery Lifecycle</h3>
-
-              <div className="space-y-4 relative pl-6 border-l-2 border-stone-200 ml-2">
-                {/* Step 1 */}
-                <div className="relative">
-                  <div className="absolute -left-[31px] top-0 w-6 h-6 rounded-full bg-[#3b6934] text-white flex items-center justify-center">
-                    <span className="material-symbols-outlined text-sm font-bold">check</span>
-                  </div>
-                  <p className="font-bold text-xs text-[#1c1b1b]">Order Confirmed</p>
-                  <p className="font-['JetBrains_Mono'] text-[11px] text-[#584238]">1:30 PM • Payment Verified</p>
-                </div>
-
-                {/* Step 2 */}
-                <div className="relative">
-                  <div className="absolute -left-[31px] top-0 w-6 h-6 rounded-full bg-[#3b6934] text-white flex items-center justify-center">
-                    <span className="material-symbols-outlined text-sm font-bold">check</span>
-                  </div>
-                  <p className="font-bold text-xs text-[#1c1b1b]">Fresh Produce Packed</p>
-                  <p className="font-['JetBrains_Mono'] text-[11px] text-[#584238]">1:42 PM • Inspected at Mama Jones</p>
-                </div>
-
-                {/* Step 3 */}
-                <div className="relative">
-                  <div className="absolute -left-[31px] top-0 w-6 h-6 rounded-full bg-[#9c3f00] text-white flex items-center justify-center animate-pulse">
-                    <span className="material-symbols-outlined text-sm">local_shipping</span>
-                  </div>
-                  <p className="font-bold text-xs text-[#9c3f00]">Out for Express Delivery</p>
-                  <p className="font-['JetBrains_Mono'] text-[11px] text-[#584238]">1:55 PM • On moped route</p>
-                </div>
-
-                {/* Step 4 */}
-                <div className="relative opacity-50">
-                  <div className="absolute -left-[31px] top-0 w-6 h-6 rounded-full bg-stone-300 text-stone-600 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-sm">home</span>
-                  </div>
-                  <p className="font-bold text-xs text-[#1c1b1b]">Arrived at Destination</p>
-                  <p className="font-['JetBrains_Mono'] text-[11px] text-[#584238]">Expected ~ 2:15 PM</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
+      )}
     </div>
   );
 };
