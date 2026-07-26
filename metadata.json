@@ -1,0 +1,6 @@
+{
+  "name": "Teedeux Mart",
+  "description": "Authentic African grocery delivery marketplace with local store selection, fresh produce catalog, live order tracking, digital wallet, and payment options.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
