@@ -72,8 +72,16 @@ count, since hubs ship independently.
 
 ## Backend
 
-The API lives in `server/` — Express + SQLite, serving catalog, carts, checkout,
-order tracking and profiles. See its [README](server/README.md).
+There are two interchangeable backends implementing the same REST surface.
+
+| | `server/` | `functions/` |
+| --- | --- | --- |
+| Stack | Express 5 + SQLite | Cloud Functions + Firestore |
+| Auth | Own JWTs, bcrypt | Firebase Auth |
+| Needs | A host with a disk | Blaze plan |
+| Status | Default, fully verified | Built, not run against Firestore |
+
+**Express** — see [server/README.md](server/README.md):
 
 ```bash
 cd server
@@ -82,8 +90,14 @@ npm run seed
 npm run dev     # http://localhost:4000
 ```
 
-The web app still runs entirely on `src/data/mockData.ts`; wiring it to the API
-is the next step.
+**Firebase** — see [FIREBASE.md](FIREBASE.md). Worth it if you want to avoid
+running a server with a persistent disk, which is what rules the Express version
+out of Netlify Functions.
+
+Both clients call relative `/api` paths, so switching backends is a proxy or
+rewrite change, not a code change — with one exception: Firebase moves sign-in
+to the client SDK, so there is no `POST /auth/login` there. FIREBASE.md has the
+mapping.
 
 ## Deploying the web app
 

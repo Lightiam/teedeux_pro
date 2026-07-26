@@ -14,3 +14,10 @@ coverage/
 # Regenerate rather than commit; all configuration lives in capacitor.config.ts.
 /android/
 /ios/
+
+# Firebase — .firebaserc holds a project id, so it stays local.
+.firebaserc
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

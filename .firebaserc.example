@@ -1,0 +1,6 @@
+{
+  "//": "Copy to .firebaserc and set your project id, or run `firebase use --add`.",
+  "projects": {
+    "default": "your-firebase-project-id"
+  }
+}

@@ -1,0 +1,85 @@
+rules_version = '2';
+
+// Teedeux Mart Firestore rules.
+//
+// Guiding principle: anything with money or order state attached is written
+// only by Cloud Functions. Functions use the Admin SDK, which bypasses these
+// rules entirely, so a rule of `allow write: if false` still permits the API to
+// write while blocking every client.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ---------------------------------------------------------------------
+    // Catalog — world-readable, never client-writable.
+    // ---------------------------------------------------------------------
+    // Read access lets a client fetch the catalog directly and skip a function
+    // invocation. Writes go through the seed script or the console.
+    match /stores/{storeId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /aisles/{aisleId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ---------------------------------------------------------------------
+    // Users — a shopper reads their own profile, but never writes it.
+    // ---------------------------------------------------------------------
+    // walletBalance and loyaltyPoints live on this document. Allowing client
+    // writes at all would let a shopper grant themselves either one, so every
+    // profile change goes through PATCH /profile, which whitelists fields.
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+
+      // -------------------------------------------------------------------
+      // Cart — the one place a client may write directly.
+      // -------------------------------------------------------------------
+      // A cart line holds no price, only a product id and a quantity, so the
+      // worst a tampering client achieves is a wrong cart of its own. Pricing
+      // is recomputed server-side at checkout regardless.
+      match /cart/{productId} {
+        allow read: if isOwner(uid);
+
+        allow create, update: if isOwner(uid)
+          && request.resource.data.quantity is int
+          && request.resource.data.quantity > 0
+          && request.resource.data.quantity <= 99
+          // Reject any field beyond the two the API writes.
+          && request.resource.data.keys().hasOnly(['quantity', 'updatedAt']);
+
+        allow delete: if isOwner(uid);
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // Orders — readable by their owner, written only by the checkout function.
+    // ---------------------------------------------------------------------
+    // Totals, status and captured item prices all live here. A client that
+    // could write this could set its own total or mark an order delivered.
+    match /orders/{orderId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+
+    // Anything not matched above is denied.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

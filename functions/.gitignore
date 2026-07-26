@@ -1,0 +1,10 @@
+node_modules/
+lib/
+*.log
+
+# Generated from src/data/mockData.ts by `npm run export:fixtures`.
+fixtures.json
+
+# Never commit service account keys.
+service-account*.json
+*-firebase-adminsdk-*.json
