@@ -70,6 +70,37 @@ Items live in one flat list and are grouped by `storeId` on read (`useCart`).
 Each fulfilment hub therefore gets its own cart with its own subtotal and item
 count, since hubs ship independently.
 
+## Shipping as a native app
+
+There are two native paths in this repo, and they are independent:
+
+| Path                | Location  | What it is                                                    |
+| ------------------- | --------- | ------------------------------------------------------------- |
+| Capacitor           | this repo | Ships *this* web build inside a native WebView shell           |
+| React Native / Expo | `mobile/` | A separate, genuinely native implementation — see its own README |
+
+### Capacitor
+
+```bash
+npm run cap:sync        # build + copy the web assets into the native projects
+npm run cap:android     # build, sync, then open Android Studio
+npm run cap:ios         # build, sync, then open Xcode (macOS only)
+```
+
+The native projects are generated, not committed. Create them once per checkout:
+
+```bash
+npx cap add android
+npx cap add ios
+```
+
+Building an APK needs the Android SDK and JDK 17+; iOS needs Xcode on macOS.
+
+`src/native.ts` holds the shell integration — status-bar styling, splash
+dismissal, and routing the Android hardware back button through the app's own
+navigation history. Every entry point checks `Capacitor.isNativePlatform()`
+first and the plugin imports are dynamic, so a browser build never loads them.
+
 ## Demo navigation
 
 A "Screen Previewer" control sits in the top-right corner and jumps directly to

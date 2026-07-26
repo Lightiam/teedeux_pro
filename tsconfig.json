@@ -22,5 +22,9 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "include": ["src", "capacitor.config.ts", "vite.config.ts"],
+  // mobile/ is a separate React Native project with its own tsconfig; checking
+  // it against this DOM-targeted config produces spurious errors.
+  "exclude": ["node_modules", "dist", "mobile", "android", "ios"]
 }

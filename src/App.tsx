@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Product, ProductCategory, ScreenId, Store, UserProfile } from './types';
 import { mockProducts, mockStores, mockUserProfile } from './data/mockData';
 import { useCart } from './hooks/useCart';
+import { registerHardwareBack } from './native';
 
 import { Header } from './components/Header';
 import { Navbar } from './components/Navbar';
@@ -56,10 +57,38 @@ export default function App() {
     setCurrentScreen(screen);
   };
 
+  /**
+   * The Android back listener is registered once, so anything it calls must
+   * read live state rather than the values captured on first render.
+   */
+  const backState = useRef({ history, activeProduct });
+  backState.current = { history, activeProduct };
+
   const goBack = () => {
-    setCurrentScreen(history[history.length - 1] ?? 'home');
+    const stack = backState.current.history;
+    setCurrentScreen(stack[stack.length - 1] ?? 'home');
     setHistory((h) => h.slice(0, -1));
   };
+
+  useEffect(
+    () =>
+      registerHardwareBack(() => {
+        // A sheet is the topmost layer — close it before unwinding navigation.
+        if (backState.current.activeProduct) {
+          setActiveProduct(null);
+          return true;
+        }
+        if (backState.current.history.length > 0) {
+          goBack();
+          return true;
+        }
+        // Nothing left to pop: let the shell exit the app.
+        return false;
+      }),
+    // Registered once for the app's lifetime; live state comes from backState.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   const openProduct = (product: Product) => setActiveProduct(product);
 
