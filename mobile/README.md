@@ -20,36 +20,53 @@ npm run lint          # tsc --noEmit
 npm run sync:shared   # refresh src/shared from the web app
 ```
 
+## The API
+
+The app talks to the backend in `server/`. Start it first:
+
+```bash
+cd ../server && npm run seed && npm run dev
+```
+
+`localhost` on a device or emulator is the device, not your machine, so the
+default base URL differs by platform: `10.0.2.2:4000` on the Android emulator,
+`localhost:4000` on the iOS simulator. On a physical device set your LAN address:
+
+```bash
+EXPO_PUBLIC_API_URL=http://192.168.1.20:4000 npm start
+```
+
+Add that origin to the server's `CORS_ORIGINS` too.
+
+Sign in with the demo account:
+
+```
+marcus.vance@example.com / teedeux1234
+```
+
 ## Shared code
 
-`src/shared/` holds three modules copied from the web app's `src/`:
+`src/shared/types.ts` is copied from the web app's `src/types.ts` — a generated
+file. Edit the web app's copy, then run `npm run sync:shared`.
 
-| File          | Source                    |
-| ------------- | ------------------------- |
-| `types.ts`    | `../src/types.ts`         |
-| `mockData.ts` | `../src/data/mockData.ts` |
-| `useCart.ts`  | `../src/hooks/useCart.ts` |
-
-They are pure TypeScript with no DOM dependency, so the native app runs them
-unmodified — including `useCart`, which drives per-hub cart grouping on both
-platforms.
-
-**These are generated files. Edit the web app's copies, then run
-`npm run sync:shared`.**
+Only types are shared. Catalog data and cart logic live on the server and reach
+both clients over HTTP, so there is nothing else to keep in step.
 
 Why copy rather than import across directories: Metro will not resolve modules
 outside the Expo project root unless the repository is laid out as a real
 monorepo with workspace symlinks. Restructuring the web app into a workspace
-package was more disruption than the sharing was worth, so the copy is explicit
-and refreshed by script instead of drifting silently.
+package was more disruption than one file of types was worth.
 
 ## Architecture
 
 ```
-App.tsx                     providers + NavigationContainer
+App.tsx                     providers; gates splash / sign-in / shop
 src/
   theme.ts                  brand tokens mirroring the web CSS variables
-  CartContext.tsx           wraps the shared useCart hook for the navigator
+  api/                      typed client and endpoint wrappers
+  AuthContext.tsx           session; token persisted with AsyncStorage
+  CatalogContext.tsx        stores, products, aisles, buy-it-again
+  CartContext.tsx           server-backed cart with optimistic updates
   navigation/
     types.ts                typed route params
     RootNavigator.tsx       stack over a 5-tab bottom navigator
@@ -59,10 +76,19 @@ src/
     RetailerCard.tsx        hub card, rail and row variants
     SectionRail.tsx         titled horizontal scroller
   screens/
+    SignInScreen,
     HomeScreen, BrowseScreen, BuyAgainScreen,
     CartsScreen, AccountScreen,
     StoreDetailScreen, ProductDetailScreen
 ```
+
+### Cart
+
+Mutations apply locally first so a stepper tap responds on the same frame, then
+reconcile with the server's response. Requests are serialised through a queue:
+the add endpoint is relative ("add one"), so two in flight at once would race
+and lose an increment. Totals are never recomputed on the client — the figure
+shown is the one the server calculated.
 
 ### Navigation
 

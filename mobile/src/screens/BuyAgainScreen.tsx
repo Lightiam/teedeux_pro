@@ -3,7 +3,7 @@ import { FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Product } from '../shared/types';
-import { buyItAgainProducts } from '../shared/mockData';
+import { useCatalog } from '../CatalogContext';
 import { useCartContext } from '../CartContext';
 import { ProductTile } from '../components/ProductTile';
 import { colors, radius } from '../theme';
@@ -17,13 +17,14 @@ const COLUMN_GAP = 12;
 export const BuyAgainScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const cart = useCartContext();
+  const { buyItAgain } = useCatalog();
   const { width } = useWindowDimensions();
   const tileWidth = (width - GUTTER * 2 - COLUMN_GAP) / 2;
 
   const openProduct = (product: Product) =>
     navigation.navigate('ProductDetail', { productId: product.id });
 
-  if (buyItAgainProducts.length === 0) {
+  if (buyItAgain.length === 0) {
     return (
       <View style={styles.empty}>
         <Text style={styles.emptyTitle}>No past orders yet</Text>
@@ -38,10 +39,10 @@ export const BuyAgainScreen: React.FC = () => {
     <View style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.caption}>
-          {buyItAgainProducts.length} items from your order history
+          {buyItAgain.length} items from your order history
         </Text>
         <Pressable
-          onPress={() => buyItAgainProducts.forEach(cart.addItem)}
+          onPress={() => buyItAgain.forEach(cart.addItem)}
           accessibilityRole="button"
           style={styles.addAll}
         >
@@ -50,7 +51,7 @@ export const BuyAgainScreen: React.FC = () => {
       </View>
 
       <FlatList
-        data={buyItAgainProducts}
+        data={buyItAgain}
         keyExtractor={(item) => item.id}
         numColumns={2}
         columnWrapperStyle={styles.column}

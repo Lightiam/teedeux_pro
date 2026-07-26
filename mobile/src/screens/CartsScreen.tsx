@@ -1,8 +1,18 @@
-import React from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { orderApi } from '../api/endpoints';
+import { useAuth } from '../AuthContext';
 import { useCartContext } from '../CartContext';
 import { QuantityStepper } from '../components/QuantityStepper';
 import { colors, radius } from '../theme';
@@ -10,12 +20,27 @@ import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const FREE_DELIVERY_THRESHOLD = 35;
-const SERVICE_FEE = 1.5;
-
 export const CartsScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const cart = useCartContext();
+  const { user } = useAuth();
+
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  const checkout = async () => {
+    setCheckoutError(null);
+    setCheckingOut(true);
+    try {
+      await orderApi.checkout({ deliveryAddress: user?.defaultAddress ?? undefined });
+      await cart.refresh();
+      navigation.navigate('Tabs', { screen: 'Account' });
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : 'Checkout failed');
+    } finally {
+      setCheckingOut(false);
+    }
+  };
 
   if (cart.storeCarts.length === 0) {
     return (
@@ -35,8 +60,8 @@ export const CartsScreen: React.FC = () => {
     );
   }
 
-  const deliveryFee = cart.subtotal > FREE_DELIVERY_THRESHOLD ? 0 : 3.99;
-  const total = cart.subtotal + deliveryFee + SERVICE_FEE;
+  // Every figure below comes from the server, so what is shown is what is charged.
+  const { totals } = cart;
 
   return (
     <ScrollView
@@ -96,28 +121,44 @@ export const CartsScreen: React.FC = () => {
       ))}
 
       <View style={styles.totals}>
-        <Row label="Subtotal" value={`$${cart.subtotal.toFixed(2)}`} />
+        <Row label="Subtotal" value={`$${totals.subtotal.toFixed(2)}`} />
         <Row
           label="Delivery"
-          value={deliveryFee === 0 ? 'Free' : `$${deliveryFee.toFixed(2)}`}
-          highlight={deliveryFee === 0}
+          value={totals.deliveryFee === 0 ? 'Free' : `$${totals.deliveryFee.toFixed(2)}`}
+          highlight={totals.deliveryFee === 0}
         />
-        <Row label="Service fee" value={`$${SERVICE_FEE.toFixed(2)}`} />
+        <Row label="Service fee" value={`$${totals.serviceFee.toFixed(2)}`} />
+        {totals.discount > 0 && (
+          <Row label="Discount" value={`-$${totals.discount.toFixed(2)}`} highlight />
+        )}
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Total</Text>
-          <Text style={styles.totalValue}>${total.toFixed(2)}</Text>
+          <Text style={styles.totalValue}>${totals.total.toFixed(2)}</Text>
         </View>
 
-        {cart.subtotal <= FREE_DELIVERY_THRESHOLD && (
+        {totals.amountToFreeDelivery > 0 && (
           <Text style={styles.hint}>
-            Add ${(FREE_DELIVERY_THRESHOLD - cart.subtotal).toFixed(2)} more for free delivery
+            Add ${totals.amountToFreeDelivery.toFixed(2)} more for free delivery
           </Text>
         )}
       </View>
 
-      <Pressable style={styles.checkout} accessibilityRole="button">
-        <MaterialIcons name="lock" size={18} color="#fff" />
-        <Text style={styles.checkoutText}>Checkout • ${total.toFixed(2)}</Text>
+      {checkoutError && <Text style={styles.error}>{checkoutError}</Text>}
+
+      <Pressable
+        onPress={checkout}
+        disabled={checkingOut}
+        style={({ pressed }) => [styles.checkout, (pressed || checkingOut) && { opacity: 0.75 }]}
+        accessibilityRole="button"
+      >
+        {checkingOut ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <>
+            <MaterialIcons name="lock" size={18} color="#fff" />
+            <Text style={styles.checkoutText}>Checkout • ${totals.total.toFixed(2)}</Text>
+          </>
+        )}
       </Pressable>
     </ScrollView>
   );
@@ -219,6 +260,16 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
   },
   checkoutText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+
+  error: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#93000a',
+    backgroundColor: '#ffdad6',
+    borderRadius: radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
 
   emptyScreen: {
     flex: 1,

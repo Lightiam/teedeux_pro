@@ -3,7 +3,7 @@ import { Text, View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
-import { mockStores } from '../shared/mockData';
+
 import { useCartContext } from '../CartContext';
 import { HomeScreen } from '../screens/HomeScreen';
 import { BrowseScreen } from '../screens/BrowseScreen';
@@ -86,13 +86,8 @@ export const RootNavigator: React.FC = () => (
     }}
   >
     <Stack.Screen name="Tabs" component={TabNavigator} options={{ headerShown: false }} />
-    <Stack.Screen
-      name="StoreDetail"
-      component={StoreDetailScreen}
-      options={({ route }) => ({
-        title: mockStores.find((s) => s.id === route.params.storeId)?.name ?? 'Hub',
-      })}
-    />
+    {/* The screen sets its own title once the catalog resolves the hub. */}
+    <Stack.Screen name="StoreDetail" component={StoreDetailScreen} options={{ title: 'Hub' }} />
     <Stack.Screen
       name="ProductDetail"
       component={ProductDetailScreen}

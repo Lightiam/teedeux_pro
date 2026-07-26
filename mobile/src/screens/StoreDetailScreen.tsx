@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Image,
   Pressable,
@@ -13,7 +14,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Product, ProductCategory } from '../shared/types';
-import { mockAisles, mockProducts, mockStores } from '../shared/mockData';
+import { useCatalog } from '../CatalogContext';
 import { useCartContext } from '../CartContext';
 import { ProductTile } from '../components/ProductTile';
 import { colors, radius } from '../theme';
@@ -28,21 +29,29 @@ export const StoreDetailScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteProp<RootStackParamList, 'StoreDetail'>>();
   const cart = useCartContext();
+  const { stores, products, aisles } = useCatalog();
   const { width } = useWindowDimensions();
 
   const [aisle, setAisle] = useState<ProductCategory | 'all'>('all');
 
-  const store = mockStores.find((s) => s.id === route.params.storeId) ?? mockStores[0];
+  const store = stores.find((s) => s.id === route.params.storeId);
+
+  // The navigator can't read the catalog, so the title is set from here once
+  // the hub resolves.
+  useEffect(() => {
+    if (store) navigation.setOptions({ title: store.name });
+  }, [navigation, store]);
+
   const storeProducts = useMemo(
-    () => mockProducts.filter((p) => p.storeId === store.id),
-    [store.id]
+    () => (store ? products.filter((p) => p.storeId === store.id) : []),
+    [products, store]
   );
 
-  /** Only offer aisles this hub actually stocks â€” empty tabs are dead ends. */
+  /** Only offer aisles this hub actually stocks — empty tabs are dead ends. */
   const availableAisles = useMemo(() => {
     const stocked = new Set(storeProducts.map((p) => p.category));
-    return mockAisles.filter((a) => stocked.has(a.id));
-  }, [storeProducts]);
+    return aisles.filter((a) => stocked.has(a.id));
+  }, [aisles, storeProducts]);
 
   const visible =
     aisle === 'all' ? storeProducts : storeProducts.filter((p) => p.category === aisle);
@@ -51,6 +60,15 @@ export const StoreDetailScreen: React.FC = () => {
 
   const openProduct = (product: Product) =>
     navigation.navigate('ProductDetail', { productId: product.id });
+
+  // The catalog may still be loading, or the hub may have been removed.
+  if (!store) {
+    return (
+      <View style={styles.missing}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <FlatList
@@ -187,6 +205,7 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 12, fontWeight: '700', color: colors.onSurfaceVariant },
   chipTextActive: { color: '#fff' },
 
+  missing: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   empty: { alignItems: 'center', paddingVertical: 48 },
   emptyTitle: { fontSize: 15, fontWeight: '700', color: colors.onSurface },
 });

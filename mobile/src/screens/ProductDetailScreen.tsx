@@ -3,7 +3,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { mockProducts } from '../shared/mockData';
+import { useCatalog } from '../CatalogContext';
 import { useCartContext } from '../CartContext';
 import { QuantityStepper } from '../components/QuantityStepper';
 import { colors, radius } from '../theme';
@@ -15,8 +15,9 @@ export const ProductDetailScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteProp<RootStackParamList, 'ProductDetail'>>();
   const cart = useCartContext();
+  const { products } = useCatalog();
 
-  const product = mockProducts.find((p) => p.id === route.params.productId);
+  const product = products.find((p) => p.id === route.params.productId);
 
   if (!product) {
     return (

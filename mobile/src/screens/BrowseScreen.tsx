@@ -3,7 +3,7 @@ import { FlatList, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions,
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Product, ProductCategory, Store } from '../shared/types';
-import { mockAisles, mockProducts, mockStores } from '../shared/mockData';
+import { useCatalog } from '../CatalogContext';
 import { useCartContext } from '../CartContext';
 import { ProductTile } from '../components/ProductTile';
 import { RetailerCard } from '../components/RetailerCard';
@@ -19,6 +19,7 @@ export const BrowseScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteProp<TabParamList, 'Browse'>>();
   const cart = useCartContext();
+  const { stores, products, aisles } = useCatalog();
   const { width } = useWindowDimensions();
 
   const [tab, setTab] = useState<'products' | 'hubs'>('products');
@@ -35,7 +36,7 @@ export const BrowseScreen: React.FC = () => {
   const tileWidth = (width - GUTTER * 2 - COLUMN_GAP) / 2;
 
   const filtered =
-    aisle === 'all' ? mockProducts : mockProducts.filter((p) => p.category === aisle);
+    aisle === 'all' ? products : products.filter((p) => p.category === aisle);
 
   const openStore = (store: Store) => navigation.navigate('StoreDetail', { storeId: store.id });
   const openProduct = (product: Product) =>
@@ -43,7 +44,7 @@ export const BrowseScreen: React.FC = () => {
 
   const chips: Array<{ id: ProductCategory | 'all'; label: string }> = [
     { id: 'all', label: 'All' },
-    ...mockAisles.map((a) => ({ id: a.id, label: a.label })),
+    ...aisles.map((a) => ({ id: a.id, label: a.label })),
   ];
 
   return (
@@ -60,8 +61,8 @@ export const BrowseScreen: React.FC = () => {
             >
               <Text style={[styles.toggleText, tab === value && styles.toggleTextActive]}>
                 {value === 'products'
-                  ? `Items (${mockProducts.length})`
-                  : `Hubs (${mockStores.length})`}
+                  ? `Items (${products.length})`
+                  : `Hubs (${stores.length})`}
               </Text>
             </Pressable>
           ))}
@@ -124,7 +125,7 @@ export const BrowseScreen: React.FC = () => {
         </>
       ) : (
         <FlatList
-          data={mockStores}
+          data={stores}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.hubList}
           showsVerticalScrollIndicator={false}

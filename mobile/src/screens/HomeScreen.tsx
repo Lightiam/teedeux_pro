@@ -4,8 +4,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Product, Store } from '../shared/types';
-import { buyItAgainProducts, mockAisles, mockProducts, mockStores } from '../shared/mockData';
 import { useCartContext } from '../CartContext';
+import { useCatalog } from '../CatalogContext';
 import { ProductTile } from '../components/ProductTile';
 import { RetailerCard } from '../components/RetailerCard';
 import { SectionRail } from '../components/SectionRail';
@@ -17,13 +17,14 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const cart = useCartContext();
+  const { stores, products, aisles, buyItAgain } = useCatalog();
 
   const openStore = (store: Store) => navigation.navigate('StoreDetail', { storeId: store.id });
   const openProduct = (product: Product) =>
     navigation.navigate('ProductDetail', { productId: product.id });
 
-  const newArrivals = mockProducts.filter((p) => p.isNewArrival).slice(0, 10);
-  const underTwenty = mockProducts.filter((p) => p.price < 20).slice(0, 10);
+  const newArrivals = products.filter((p) => p.isNewArrival).slice(0, 10);
+  const underTwenty = products.filter((p) => p.price < 20).slice(0, 10);
 
   const tileProps = {
     onIncrement: cart.addItem,
@@ -51,18 +52,18 @@ export const HomeScreen: React.FC = () => {
         subtitle="Verified African grocery fulfilment hubs"
         onSeeAll={() => navigation.navigate('Tabs', { screen: 'Browse' })}
       >
-        {mockStores.map((store) => (
+        {stores.map((store) => (
           <RetailerCard key={store.id} store={store} onSelect={openStore} />
         ))}
       </SectionRail>
 
-      {buyItAgainProducts.length > 0 && (
+      {buyItAgain.length > 0 && (
         <SectionRail
           title="Buy it again"
           subtitle="Straight from your past orders"
           onSeeAll={() => navigation.navigate('Tabs', { screen: 'BuyAgain' })}
         >
-          {buyItAgainProducts.map((product) => (
+          {buyItAgain.map((product) => (
             <ProductTile
               key={product.id}
               product={product}
@@ -78,7 +79,7 @@ export const HomeScreen: React.FC = () => {
         <Text style={styles.sectionSub}>Browse the full catalog by department</Text>
 
         <View style={styles.aisleGrid}>
-          {mockAisles.map((aisle) => (
+          {aisles.map((aisle) => (
             <Pressable
               key={aisle.id}
               onPress={() =>
@@ -135,7 +136,7 @@ export const HomeScreen: React.FC = () => {
       <View style={styles.hubSection}>
         <Text style={styles.sectionTitle}>All fulfilment hubs</Text>
         <View style={styles.hubList}>
-          {mockStores.map((store) => (
+          {stores.map((store) => (
             <RetailerCard key={store.id} store={store} layout="row" onSelect={openStore} />
           ))}
         </View>

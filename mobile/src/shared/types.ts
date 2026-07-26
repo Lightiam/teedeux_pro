@@ -1,5 +1,5 @@
-// GENERATED FILE — do not edit.
-// Copied from ../../../src by "npm run sync:shared". Edit the source there.
+// GENERATED FILE - do not edit.
+// Copied from the web app's src/ by "npm run sync:shared". Edit it there.
 export type ScreenId =
   | 'splash'
   | 'onboarding-discover'

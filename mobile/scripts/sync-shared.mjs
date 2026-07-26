@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 /**
- * Copies the web app's platform-agnostic modules into src/shared/.
+ * Copies the web app's domain types into src/shared/.
  *
  * Metro will not resolve modules outside the Expo project root without a real
  * monorepo, and the repo is not laid out as one. Rather than fight the
- * resolver, the native app keeps its own copy of these files and this script
- * refreshes them. Run it after changing any of the sources listed below.
+ * resolver, the native app keeps its own copy and this script refreshes it.
  *
  *   npm run sync:shared
  *
- * Only files with zero DOM/browser dependencies belong here.
+ * Only types are shared now — catalog data and cart logic live on the server
+ * and reach both clients over HTTP. Anything added here must be free of
+ * DOM/browser dependencies.
  */
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -21,11 +22,7 @@ const webSrc = resolve(projectRoot, '..', 'src');
 const target = join(projectRoot, 'src', 'shared');
 
 /** Source file (relative to the web app's src/) → destination name. */
-const FILES = [
-  ['types.ts', 'types.ts'],
-  ['data/mockData.ts', 'mockData.ts'],
-  ['hooks/useCart.ts', 'useCart.ts'],
-];
+const FILES = [['types.ts', 'types.ts']];
 
 const BANNER = `// GENERATED FILE - do not edit.
 // Copied from the web app's src/ by "npm run sync:shared". Edit it there.
