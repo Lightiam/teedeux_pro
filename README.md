@@ -85,6 +85,27 @@ npm run dev     # http://localhost:4000
 The web app still runs entirely on `src/data/mockData.ts`; wiring it to the API
 is the next step.
 
+## Deploying the web app
+
+`netlify.toml` configures a Netlify deploy: `npm run build` into `dist`, an SPA
+fallback, long-lived caching for fingerprinted assets, and security headers.
+
+Two things need doing before it works end to end:
+
+1. **Deploy the API separately and set `API_TARGET`** in `netlify.toml`'s `/api/*`
+   redirect. Netlify Functions cannot host this API — it is a long-running
+   Express process backed by a SQLite file, and Functions have an ephemeral
+   per-invocation filesystem, so every write would be lost. Use a host with a
+   persistent disk (Fly.io, Railway, Render, a VM).
+
+2. **Add your Netlify origin to the API's `CORS_ORIGINS`.** Requests proxied
+   through the redirect arrive same-origin, but any direct call — the Capacitor
+   build, for instance — will not be.
+
+The client calls relative `/api` paths in development and production alike, so
+no build-time URL is needed unless something calls the API cross-origin. In that
+case set `VITE_API_URL`.
+
 ## Shipping as a native app
 
 There are two native paths in this repo, and they are independent:

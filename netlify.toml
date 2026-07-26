@@ -1,0 +1,77 @@
+#  Netlify deployment for the Teedeux Mart web app.
+#
+#  This deploys the Vite SPA only. The API in server/ is a long-running Express
+#  process backed by a SQLite file, which Netlify Functions cannot host — their
+#  filesystem is ephemeral and per-invocation, so every write would be lost.
+#  Deploy the API somewhere with a persistent disk (Fly.io, Railway, Render, a
+#  VM) and point API_TARGET at it. See the note at the bottom of this file.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # Keep devDependencies — vite and typescript live there and the build needs them.
+  NPM_FLAGS = "--include=dev"
+
+# ---------------------------------------------------------------------------
+# API proxying
+# ---------------------------------------------------------------------------
+# The client calls relative /api paths, matching the Vite dev proxy, so the same
+# code works in both places. Replace API_TARGET below with your deployed API
+# origin. Until then the rule 404s rather than silently serving index.html,
+# which would surface as confusing JSON parse errors in the client.
+[[redirects]]
+  from = "/api/*"
+  to = "https://API_TARGET/api/:splat"
+  status = 200
+  force = true
+
+# ---------------------------------------------------------------------------
+# SPA fallback
+# ---------------------------------------------------------------------------
+# Must come after the API rule: Netlify applies redirects in order, and a
+# catch-all placed first would swallow /api requests.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# ---------------------------------------------------------------------------
+# Headers
+# ---------------------------------------------------------------------------
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(self)"
+
+# Vite fingerprints filenames, so assets are safe to cache indefinitely.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# The shell and manifest must never be cached, or a deploy won't reach clients.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Content-Type = "application/manifest+json"
+
+# ---------------------------------------------------------------------------
+# Deploy previews
+# ---------------------------------------------------------------------------
+[context.deploy-preview]
+  command = "npm run build"
+
+[context.branch-deploy]
+  command = "npm run build"
