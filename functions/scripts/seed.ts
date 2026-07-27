@@ -209,6 +209,15 @@ async function seedDemoUser(): Promise<void> {
   console.log(`seeded ${byStore.size} historical orders`);
 }
 
-await seedCatalog();
-await seedDemoUser();
-console.log('done');
+// Wrapped rather than top-level await: this package has no "type": "module",
+// so tsx transpiles the script to CommonJS, where top-level await is invalid.
+async function main(): Promise<void> {
+  await seedCatalog();
+  await seedDemoUser();
+  console.log('done');
+}
+
+main().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});
