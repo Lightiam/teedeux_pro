@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { catalogApi } from '../api/endpoints';
+import { isFirebaseConfigured } from '../auth/firebase';
+import { firestoreCatalog } from '../firestore/catalog';
 import type { Aisle, Product, Store } from '../types';
 
 interface AsyncState<T> {
@@ -38,22 +40,28 @@ export function useCatalog() {
     setAisles((s) => ({ ...s, isLoading: true }));
     setProducts((s) => ({ ...s, isLoading: true }));
 
-    // Independent requests — fire together rather than in sequence.
-    const [storesResult, aislesResult, productsResult] = await Promise.allSettled([
-      catalogApi.stores(),
-      catalogApi.aisles(),
-      catalogApi.products({ limit: 200 }),
-    ]);
+    // On Firebase the catalog is read straight from Firestore — the published
+    // rules make it world-readable, so browsing works with no Functions
+    // deployed. Otherwise it comes over HTTP from the Express backend.
+    const [storesResult, aislesResult, productsResult] = await Promise.allSettled(
+      isFirebaseConfigured
+        ? [firestoreCatalog.stores(), firestoreCatalog.aisles(), firestoreCatalog.products()]
+        : [
+            catalogApi.stores().then((r) => r.stores),
+            catalogApi.aisles().then((r) => r.aisles),
+            catalogApi.products({ limit: 200 }).then((r) => r.products),
+          ]
+    );
 
     setStores(
       storesResult.status === 'fulfilled'
-        ? { data: storesResult.value.stores, isLoading: false, error: null }
+        ? { data: storesResult.value as Store[], isLoading: false, error: null }
         : { data: [], isLoading: false, error: message(storesResult.reason, 'Could not load hubs') }
     );
 
     setAisles(
       aislesResult.status === 'fulfilled'
-        ? { data: aislesResult.value.aisles, isLoading: false, error: null }
+        ? { data: aislesResult.value as Aisle[], isLoading: false, error: null }
         : {
             data: [],
             isLoading: false,
@@ -63,7 +71,7 @@ export function useCatalog() {
 
     setProducts(
       productsResult.status === 'fulfilled'
-        ? { data: productsResult.value.products, isLoading: false, error: null }
+        ? { data: productsResult.value as Product[], isLoading: false, error: null }
         : {
             data: [],
             isLoading: false,
@@ -86,7 +94,13 @@ export function useCatalog() {
   };
 }
 
-/** Past purchases for the buy-it-again rail. Empty when signed out. */
+/**
+ * Past purchases for the buy-it-again rail. Empty when signed out.
+ *
+ * Order history needs the API. On Firebase without Functions deployed the
+ * request fails and the rail simply stays hidden, which is a lesser failure
+ * than a broken home screen.
+ */
 export function useBuyItAgain(enabled: boolean) {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(enabled);
@@ -107,7 +121,6 @@ export function useBuyItAgain(enabled: boolean) {
         if (!cancelled) setProducts(result.products);
       })
       .catch(() => {
-        // A missing rail is a lesser failure than a broken home screen.
         if (!cancelled) setProducts([]);
       })
       .finally(() => {

@@ -8,9 +8,10 @@ import React, {
   useState,
 } from 'react';
 import { ApiError, setTokenReader, setUnauthorizedHandler } from '../api/client';
-import { authApi, firebaseAuthApi } from '../api/endpoints';
+import { authApi } from '../api/endpoints';
 import type { ApiUser } from '../api/types';
 import { describeAuthError, firebaseAuth, isFirebaseConfigured } from '../auth/firebase';
+import { loadProfile } from '../firestore/profile';
 
 const TOKEN_KEY = 'teedeux.token';
 
@@ -111,22 +112,14 @@ const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           return;
         }
 
-        try {
-          // ensureProfile rather than /auth/me: an account created outside this
-          // API (console, or a future Google sign-in) has no profile document,
-          // and this creates one rather than failing.
-          const { user: profile } = await firebaseAuthApi.ensureProfile();
-          if (!cancelled) {
-            loadedUidRef.current = firebaseUser.uid;
-            setUserState(profile);
-          }
-        } catch (error) {
-          if (!cancelled) {
-            console.error('Could not load your profile', error);
-            setUserState(null);
-          }
-        } finally {
-          if (!cancelled) setIsLoading(false);
+        // Derived from the Auth account, enriched by the Firestore profile when
+        // one exists. Never fails the sign-in: an authenticated shopper with no
+        // profile document is still signed in.
+        const profile = await loadProfile(firebaseUser);
+        if (!cancelled) {
+          loadedUidRef.current = firebaseUser.uid;
+          setUserState(profile);
+          setIsLoading(false);
         }
       })
     );
@@ -147,21 +140,26 @@ const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, []);
 
-  const signup = useCallback(
-    async (name: string, email: string, password: string, phone?: string) => {
-      // Server-side so the Auth record and the profile document are created
-      // together; a client-only createUser would leave a user with no profile.
-      await firebaseAuthApi.signup({ name, email, password, phone });
+  const signup = useCallback(async (name: string, email: string, password: string) => {
+    // Created directly against Firebase Auth rather than through the API, so
+    // signing up does not depend on Cloud Functions being deployed. The display
+    // name is the only profile field a client may write — walletBalance and
+    // loyaltyPoints live in Firestore, which the rules keep server-only.
+    const { createUserWithEmailAndPassword, updateProfile } = await import('firebase/auth');
 
-      const { signInWithEmailAndPassword } = await import('firebase/auth');
-      try {
-        await signInWithEmailAndPassword(firebaseAuth(), email, password);
-      } catch (error) {
-        throw new Error(describeAuthError(error));
+    try {
+      const credential = await createUserWithEmailAndPassword(firebaseAuth(), email, password);
+      if (name.trim()) {
+        await updateProfile(credential.user, { displayName: name.trim() });
       }
-    },
-    []
-  );
+      // onIdTokenChanged has already fired with the pre-update user, so refresh
+      // the session's copy now that the display name is set.
+      await credential.user.reload();
+      setUserState(await loadProfile(credential.user));
+    } catch (error) {
+      throw new Error(describeAuthError(error));
+    }
+  }, []);
 
   const resetPassword = useCallback(async (email: string) => {
     const { sendPasswordResetEmail } = await import('firebase/auth');

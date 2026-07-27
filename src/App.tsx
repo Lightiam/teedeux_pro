@@ -2,9 +2,12 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Product, ProductCategory, ScreenId, Store } from './types';
 import type { ApiOrder, ApiOrderStatus } from './api/types';
 import { orderApi } from './api/endpoints';
+import { ApiError } from './api/client';
 import { useAuth } from './context/AuthContext';
+import { isFirebaseConfigured } from './auth/firebase';
 import { useBuyItAgain, useCatalog } from './hooks/useCatalog';
 import { useServerCart } from './hooks/useServerCart';
+import { useFirestoreCart } from './hooks/useFirestoreCart';
 import { registerHardwareBack } from './native';
 
 import { Header } from './components/Header';
@@ -81,8 +84,17 @@ const AuthFlow: React.FC = () => {
 function Shop() {
   const { user, logout, setUser } = useAuth();
   const catalog = useCatalog();
-  const cart = useServerCart(true);
   const buyItAgain = useBuyItAgain(true);
+
+  // Both hooks are called unconditionally — React requires a stable hook order —
+  // and only the one matching the deployment is given work to do.
+  const apiCart = useServerCart(!isFirebaseConfigured);
+  const firestoreCartState = useFirestoreCart(
+    isFirebaseConfigured ? (user?.id ?? null) : null,
+    catalog.products,
+    catalog.stores
+  );
+  const cart = isFirebaseConfigured ? firestoreCartState : apiCart;
 
   const [currentScreen, setCurrentScreen] = useState<ScreenId>('home');
   const [history, setHistory] = useState<ScreenId[]>([]);
@@ -168,7 +180,21 @@ function Shop() {
   };
 
   const handleCheckout = async () => {
-    await orderApi.checkout({ deliveryAddress: user?.defaultAddress ?? undefined });
+    try {
+      await orderApi.checkout({ deliveryAddress: user?.defaultAddress ?? undefined });
+    } catch (error) {
+      // Checkout is the one thing that cannot move to the client: order totals
+      // must be computed server-side or a shopper could set their own price.
+      // Say so plainly rather than surfacing a transport error.
+      if (error instanceof ApiError && error.code === 'api_unreachable') {
+        throw new Error(
+          'Checkout is not available yet — the order service has not been deployed. ' +
+            'Your cart is saved and will still be here.'
+        );
+      }
+      throw error;
+    }
+
     await Promise.all([cart.refresh(), loadOrders()]);
     setTrackedOrderId(null);
     navigate('order-tracking');

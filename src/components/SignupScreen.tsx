@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ScreenId } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { isFirebaseConfigured } from '../auth/firebase';
 import { AuthField, FormMessage, SubmitButton } from './ui/AuthField';
 
 interface SignupScreenProps {
@@ -70,14 +71,21 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({ onNavigate }) => {
           required
         />
 
-        <AuthField
-          label="Phone"
-          type="tel"
-          value={phone}
-          onChange={setPhone}
-          placeholder="Optional"
-          autoComplete="tel"
-        />
+        {/*
+          Only collected on the Express backend. On Firebase the profile
+          document is server-written, so a client-supplied phone number would
+          be discarded — better not to ask for it than to drop it silently.
+        */}
+        {!isFirebaseConfigured && (
+          <AuthField
+            label="Phone"
+            type="tel"
+            value={phone}
+            onChange={setPhone}
+            placeholder="Optional"
+            autoComplete="tel"
+          />
+        )}
 
         <AuthField
           label="Password"
