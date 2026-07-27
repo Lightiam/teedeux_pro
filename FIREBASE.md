@@ -40,11 +40,50 @@ Also needs the Firebase CLI and **JDK 11+** for the emulators.
 
 ```bash
 npm install -g firebase-tools
+firebase login
 cp .firebaserc.example .firebaserc     # then set your project id
 cd functions && npm install
 ```
 
-Enable **Email/Password** under Authentication → Sign-in method in the console.
+In the console:
+
+1. **Authentication → Sign-in method → enable Email/Password**
+2. **Firestore Database → Create database** (the rules in this repo replace the
+   defaults on first deploy)
+
+Then register a web app and copy its config into `.env.local` at the repo root:
+
+```bash
+firebase apps:create web "Teedeux Mart"
+firebase apps:sdkconfig web
+```
+
+Or use **Project settings → General → Your apps → Add app → Web**.
+
+```bash
+VITE_FIREBASE_API_KEY="AIza..."
+VITE_FIREBASE_AUTH_DOMAIN="your-project.firebaseapp.com"
+VITE_FIREBASE_PROJECT_ID="your-project"
+VITE_FIREBASE_STORAGE_BUCKET="your-project.firebasestorage.app"
+VITE_FIREBASE_MESSAGING_SENDER_ID="000000000000"
+VITE_FIREBASE_APP_ID="1:000000000000:web:abc123"
+```
+
+These values are **public** — they ship in the client bundle and identify the
+project rather than granting access to it. A **service account key is not**: it
+grants full admin access and bypasses every security rule. Keep one outside the
+repo and reference it by path, only for the seed script.
+
+### How the client picks a backend
+
+Presence of `VITE_FIREBASE_*` is the switch. With it, the app signs in through
+Firebase Auth; without it, it uses the Express backend in `server/` and its own
+JWTs. Detected from config rather than a mode flag, so a checkout with no
+Firebase env vars still runs.
+
+The Firebase SDK adds roughly **35 kB gzipped** to the bundle (85 kB → 121 kB).
+`firebase/auth` is dynamically imported so it lands in a separate chunk, but
+`firebase/app` is static and ships either way.
 
 ## Running locally
 
@@ -105,7 +144,20 @@ rest of the API to read.
 
 The upside worth noting: password reset becomes a real emailed, signed,
 single-use link. The Express version sets the password directly, which was the
-one endpoint I would not have shipped.
+one endpoint I would not have shipped. The reset screen adapts — it collects a
+new password on the Express path and only an email on Firebase.
+
+### Bridging async tokens to a sync client
+
+The API client reads the bearer token **synchronously** on every request, but
+Firebase ID tokens are async and rotate roughly hourly. Awaiting `getIdToken()`
+per call would have meant making every request path async.
+
+Instead `AuthContext` subscribes to `onIdTokenChanged` — which fires on sign-in,
+sign-out and every refresh — and caches the current token in a ref that the
+synchronous reader returns. The same listener doubles as the boot signal, so
+there is no separate "validate the stored token" round trip on startup, and the
+profile is only re-fetched when the uid changes rather than on every refresh.
 
 ### Product search
 
@@ -173,6 +225,16 @@ installed.
   routing, the 404 and error envelopes, auth rejection on all six protected
   routes, invalid-token handling, and zod validation
 
+On the client, with placeholder config supplying no real project:
+
+- The Firebase branch engages on presence of the env vars, and the Express
+  branch still signs in successfully when they are absent
+- The reset screen switches between "send reset link" and "choose a new
+  password" with the field appearing and disappearing accordingly
+- A bad API key surfaces as "Firebase rejected the API key. Check
+  VITE_FIREBASE_API_KEY against the console" rather than Firebase's raw
+  `auth/api-key-not-valid.-please-pass-a-valid-api-key.`
+
 **Not verified — exercise these first**
 
 - Every Firestore read and write
@@ -180,6 +242,9 @@ installed.
 - Security rules (write rules tests with `@firebase/rules-unit-testing`)
 - Composite indexes — Firestore will tell you at query time if one is missing
 - The seed script against a real or emulated database
+- A real Firebase sign-in, and therefore the ID-token bridge end to end
+- **The Expo app still uses the Express backend.** Its auth has not been moved
+  to Firebase; `mobile/src/AuthContext.tsx` still calls `/auth/login`.
 
 Once the emulators are running, `server/test/api.test.mjs` is the fastest way to
 get real coverage: point `API_URL` at the emulated function and the 60 existing

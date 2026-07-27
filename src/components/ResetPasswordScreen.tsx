@@ -8,7 +8,7 @@ interface ResetPasswordScreenProps {
 }
 
 export const ResetPasswordScreen: React.FC<ResetPasswordScreenProps> = ({ onNavigate }) => {
-  const { resetPassword } = useAuth();
+  const { resetPassword, resetSendsEmail } = useAuth();
   const [email, setEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +19,8 @@ export const ResetPasswordScreen: React.FC<ResetPasswordScreenProps> = ({ onNavi
     e.preventDefault();
     setError(null);
 
-    if (newPassword.length < 8) {
+    // Firebase emails a reset link, so there is no password to collect here.
+    if (!resetSendsEmail && newPassword.length < 8) {
       setError('Password must be at least 8 characters');
       return;
     }
@@ -42,7 +43,9 @@ export const ResetPasswordScreen: React.FC<ResetPasswordScreenProps> = ({ onNavi
         </div>
         <h1 className="text-2xl font-extrabold text-[#1c1b1b]">Reset your password</h1>
         <p className="text-sm text-[#584238] mt-1">
-          Enter your email and choose a new password.
+          {resetSendsEmail
+            ? "Enter your email and we'll send you a reset link."
+            : 'Enter your email and choose a new password.'}
         </p>
       </div>
 
@@ -71,17 +74,27 @@ export const ResetPasswordScreen: React.FC<ResetPasswordScreenProps> = ({ onNavi
             required
           />
 
-          <AuthField
-            label="New password"
-            type="password"
-            value={newPassword}
-            onChange={setNewPassword}
-            placeholder="At least 8 characters"
-            autoComplete="new-password"
-            required
-          />
+          {!resetSendsEmail && (
+            <AuthField
+              label="New password"
+              type="password"
+              value={newPassword}
+              onChange={setNewPassword}
+              placeholder="At least 8 characters"
+              autoComplete="new-password"
+              required
+            />
+          )}
 
-          <SubmitButton busy={busy}>{busy ? 'Resetting…' : 'Reset password'}</SubmitButton>
+          <SubmitButton busy={busy}>
+            {busy
+              ? resetSendsEmail
+                ? 'Sending…'
+                : 'Resetting…'
+              : resetSendsEmail
+                ? 'Send reset link'
+                : 'Reset password'}
+          </SubmitButton>
 
           <button
             type="button"

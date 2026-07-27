@@ -24,6 +24,21 @@ export const authApi = {
   me: () => api.get<{ user: ApiUser }>('/auth/me'),
 };
 
+/**
+ * Endpoints that only exist on the Firebase backend.
+ *
+ * Sign-in and password reset are handled by the Firebase SDK on the client, so
+ * there is no /auth/login here. Signup still goes through the server, which
+ * creates the Auth record and the profile document together.
+ */
+export const firebaseAuthApi = {
+  signup: (body: { name: string; email: string; password: string; phone?: string }) =>
+    api.post<{ user: ApiUser }>('/auth/signup', body, { anonymous: true }),
+
+  /** Backfills a profile for accounts created outside this API. */
+  ensureProfile: () => api.post<{ user: ApiUser }>('/auth/ensure-profile'),
+};
+
 export const catalogApi = {
   stores: () => api.get<{ stores: Store[] }>('/catalog/stores'),
 

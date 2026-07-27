@@ -21,3 +21,10 @@ coverage/
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
+
+# Service account keys grant full admin access and bypass every security rule.
+# Never commit one; keep it outside the repo and reference it by path.
+*firebase-adminsdk*.json
+service-account*.json
+serviceAccountKey*.json
+**/*-adminsdk-*.json
