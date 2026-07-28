@@ -1,9 +1,38 @@
-# Teedeux Mart
+# Teedeux Mart — archived
 
-Mobile grocery-delivery app for authentic African and diaspora groceries, delivered
-nationwide across all 50 US states. The shopping experience follows the patterns
-established by Instacart — retailer carousel, buy-it-again, aisle browsing, per-hub
-carts — dressed in Teedeux's own brand.
+> **The active app now lives at
+> [Lightiam/teedeux-joy-maker](https://github.com/Lightiam/teedeux-joy-maker).**
+>
+> That repo is where Lovable writes, it has a working server-side checkout, and
+> it adds admin, driver and god-view screens this one never had. It reuses the
+> components built here — `QuantityStepper`, `ProductTile`, `RetailerCard`,
+> `SectionRail` and the screens — on a Supabase backend.
+>
+> Nothing here is deleted. The React Native app, the Capacitor wrapper and the
+> Express API with its 60 passing tests all still work; they are simply no
+> longer maintained. Read on if you need one of them.
+
+Mobile grocery-delivery app for authentic African and diaspora groceries,
+delivered nationwide across all 50 US states. The shopping experience follows
+the patterns established by Instacart — retailer carousel, buy-it-again, aisle
+browsing, per-hub carts — dressed in Teedeux's own brand.
+
+## Why this repo was retired
+
+Two backends were built here. Both hit walls that the Supabase one does not:
+
+- **Express + SQLite** (`server/`) — complete and fully tested, but SQLite is a
+  file, so it needs a host with a persistent disk. That rules out Netlify
+  Functions and most serverless platforms.
+- **Firebase Functions + Firestore** (`functions/`) — written and typechecked,
+  but never deployable from here: the available credentials are refused
+  `cloudfunctions.functions.create`, `serviceusage.services.enable` and
+  `firebaserules.releases.update`.
+
+The Firebase build did reach production at `teedeux-d7927.web.app` with
+authentication, catalog and cart working against Firestore directly. Checkout
+was the piece that could not be finished, because order totals must be computed
+somewhere a shopper cannot reach.
 
 ## Stack
 
