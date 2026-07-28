@@ -7,6 +7,10 @@ interface OrderTrackingScreenProps {
   isLoading: boolean;
   onNavigate: (screen: ScreenId) => void;
   onAdvance: (orderId: string, status: ApiOrderStatus) => Promise<void>;
+  /** False when status transitions are server-only and no server is deployed. */
+  canAdvance: boolean;
+  /** True when no server has priced this order, so the total is an estimate. */
+  pricingPending: boolean;
 }
 
 interface Step {
@@ -29,6 +33,8 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
   isLoading,
   onNavigate,
   onAdvance,
+  canAdvance,
+  pricingPending,
 }) => {
   const [busy, setBusy] = useState(false);
 
@@ -89,10 +95,29 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
               {order.id}
             </p>
           </div>
-          <span className="font-extrabold text-sm text-[#9c3f00] tabular-nums shrink-0">
-            ${order.total.toFixed(2)}
+          <span className="flex flex-col items-end shrink-0">
+            <span className="font-extrabold text-sm text-[#9c3f00] tabular-nums">
+              ${order.total.toFixed(2)}
+            </span>
+            {pricingPending && (
+              <span className="font-['JetBrains_Mono'] text-[9px] uppercase tracking-wider text-[#584238]">
+                estimate
+              </span>
+            )}
           </span>
         </div>
+
+        {pricingPending && (
+          <div className="mt-2 flex items-start gap-2 rounded-2xl bg-[#ffdf9f]/50 px-3 py-2.5">
+            <span className="material-symbols-outlined text-[#765700] text-base shrink-0">
+              schedule
+            </span>
+            <p className="text-[11px] text-[#765700] leading-relaxed">
+              Your final total is confirmed once the hub packs your order — weights and
+              substitutions can change it.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Progress */}
@@ -215,7 +240,7 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
         Standing in for the courier and warehouse systems that would drive
         status in production, so the flow can be walked end to end.
       */}
-      {!isCancelled && nextStep && (
+      {canAdvance && !isCancelled && nextStep && (
         <div className="px-4 space-y-2">
           <p className="font-['JetBrains_Mono'] text-[10px] uppercase tracking-wider text-[#584238] font-bold px-1">
             Demo controls

@@ -68,13 +68,37 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
-    // Orders — readable by their owner, written only by the checkout function.
+    // Orders
     // ---------------------------------------------------------------------
-    // Totals, status and captured item prices all live here. A client that
-    // could write this could set its own total or mark an order delivered.
+    // A shopper may place an order, but it carries NO MONEY: no prices, no
+    // total, no fees. `hasOnly` is what enforces that — any attempt to write a
+    // total or a unit price is rejected outright, so a client cannot name its
+    // own price.
+    //
+    // Rules have no way to sum a list, so there is no way to verify a
+    // client-supplied total against real product prices. The only safe answer
+    // is to refuse to store one. Pricing is applied server-side afterwards,
+    // which is also how grocery delivery actually works — weights and
+    // substitutions move the final figure after the order is placed.
+    //
+    // Updates and deletes stay closed: status transitions and the eventual
+    // pricing are the server's to write.
     match /orders/{orderId} {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow write: if false;
+
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'placed'
+        && request.resource.data.keys().hasOnly(
+             ['userId', 'storeId', 'status', 'placedAt', 'deliveryAddress', 'items'])
+        && request.resource.data.keys().hasAll(
+             ['userId', 'storeId', 'status', 'placedAt', 'items'])
+        && request.resource.data.storeId is string
+        && request.resource.data.items is list
+        && request.resource.data.items.size() > 0
+        && request.resource.data.items.size() <= 50;
+
+      allow update, delete: if false;
     }
 
     // Anything not matched above is denied.

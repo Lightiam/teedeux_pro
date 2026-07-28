@@ -8,6 +8,7 @@ import { isFirebaseConfigured } from './auth/firebase';
 import { useBuyItAgain, useCatalog } from './hooks/useCatalog';
 import { useServerCart } from './hooks/useServerCart';
 import { useFirestoreCart } from './hooks/useFirestoreCart';
+import { firestoreOrders, isPendingPricing } from './firestore/orders';
 import { registerHardwareBack } from './native';
 
 import { Header } from './components/Header';
@@ -112,7 +113,14 @@ function Shop() {
   const loadOrders = useCallback(async () => {
     setOrdersLoading(true);
     try {
-      const { orders: loaded } = await orderApi.list();
+      // On Firebase, orders are read straight from Firestore and their display
+      // detail rebuilt from the catalog — the order document holds only item
+      // ids and quantities.
+      const loaded =
+        isFirebaseConfigured && user
+          ? await firestoreOrders.list(user.id, catalog.products, catalog.stores)
+          : (await orderApi.list()).orders;
+
       setOrders(loaded);
       setOrdersError(null);
     } catch (err) {
@@ -120,7 +128,7 @@ function Shop() {
     } finally {
       setOrdersLoading(false);
     }
-  }, []);
+  }, [user, catalog.products, catalog.stores]);
 
   useEffect(() => {
     void loadOrders();
@@ -180,19 +188,35 @@ function Shop() {
   };
 
   const handleCheckout = async () => {
-    try {
-      await orderApi.checkout({ deliveryAddress: user?.defaultAddress ?? undefined });
-    } catch (error) {
-      // Checkout is the one thing that cannot move to the client: order totals
-      // must be computed server-side or a shopper could set their own price.
-      // Say so plainly rather than surfacing a transport error.
-      if (error instanceof ApiError && error.code === 'api_unreachable') {
-        throw new Error(
-          'Checkout is not available yet — the order service has not been deployed. ' +
-            'Your cart is saved and will still be here.'
-        );
+    if (isFirebaseConfigured && user) {
+      // Writes one order per hub carrying item ids and quantities only. The
+      // rules reject any price or total, so the figure shown in the cart is an
+      // estimate until a server prices the order.
+      try {
+        await firestoreOrders.placeOrders(user.id, cart.storeCarts, user.defaultAddress);
+      } catch (error) {
+        // The order-create rule is newer than the rest; a project still on the
+        // previous ruleset rejects the write outright.
+        if ((error as { code?: string })?.code === 'permission-denied') {
+          throw new Error(
+            'Checkout is not enabled yet — the updated Firestore rules have not been ' +
+              'published. Your cart is saved and will still be here.'
+          );
+        }
+        throw error;
       }
-      throw error;
+    } else {
+      try {
+        await orderApi.checkout({ deliveryAddress: user?.defaultAddress ?? undefined });
+      } catch (error) {
+        if (error instanceof ApiError && error.code === 'api_unreachable') {
+          throw new Error(
+            'Checkout is not available yet — the order service has not been deployed. ' +
+              'Your cart is saved and will still be here.'
+          );
+        }
+        throw error;
+      }
     }
 
     await Promise.all([cart.refresh(), loadOrders()]);
@@ -344,6 +368,12 @@ function Shop() {
             isLoading={ordersLoading}
             onNavigate={navigate}
             onAdvance={advanceOrder}
+            // Status transitions and pricing are both server-written; the rules
+            // keep clients out of them.
+            canAdvance={!isFirebaseConfigured}
+            pricingPending={
+              isFirebaseConfigured && trackedOrder !== null && isPendingPricing(trackedOrder)
+            }
           />
         )}
 
